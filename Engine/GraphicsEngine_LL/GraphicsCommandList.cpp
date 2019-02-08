@@ -70,7 +70,7 @@ void GraphicsCommandList::ClearRenderTarget(const RenderTargetView2D& resource,
 	size_t numRects,
 	gxapi::Rectangle* rects)
 {
-	//ExpectResourceState(resource.GetResource(), gxapi::eResourceState::RENDER_TARGET);
+	ExpectResourceState(resource.GetResource(), gxapi::eResourceState::RENDER_TARGET, resource.GetSubresourceList());
 	m_commandList->ClearRenderTarget(resource.GetHandle(), color, numRects, rects);
 }
 
@@ -87,6 +87,8 @@ void GraphicsCommandList::DrawIndexedInstanced(unsigned numIndices,
 {
 	m_commandList->DrawIndexedInstanced(numIndices, startIndex, vertexOffset, numInstances, startInstance);
 	m_graphicsBindingManager.CommitDrawCall();
+
+	m_performanceCounters.numDrawCalls++;
 }
 
 void GraphicsCommandList::DrawInstanced(unsigned numVertices,
@@ -96,6 +98,8 @@ void GraphicsCommandList::DrawInstanced(unsigned numVertices,
 {
 	m_commandList->DrawInstanced(numVertices, startVertex, numInstances, startInstance);
 	m_graphicsBindingManager.CommitDrawCall();
+
+	m_performanceCounters.numDrawCalls++;
 }
 
 
@@ -194,9 +198,15 @@ void GraphicsCommandList::SetViewports(unsigned numViewports, gxapi::Viewport* v
 // Set graphics root signature stuff
 //------------------------------------------------------------------------------
 
-void GraphicsCommandList::SetGraphicsBinder(Binder* binder) {
+void GraphicsCommandList::SetGraphicsBinder(const Binder* binder) {
 	assert(binder != nullptr);
-	m_graphicsBindingManager.SetBinder(binder);
+	try {
+		m_graphicsBindingManager.SetBinder(binder);
+	}
+	catch (std::bad_alloc&) {
+		NewScratchSpace(1000);
+		m_graphicsBindingManager.SetBinder(binder);
+	}
 }
 
 

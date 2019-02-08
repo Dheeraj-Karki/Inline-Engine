@@ -10,13 +10,13 @@ namespace impl {
 template <class T>
 struct IsEnumFlagSuitable {
 private:
-	template <class U = decltype(T::EnumT())>
+	template <class U = typename T::EnumT>
 	static constexpr bool has(int) { return true; }
 
 	template <class U>
 	static constexpr bool has(...) { return false; }
 public:
-	static constexpr bool value = has<int>(0) && std::is_enum_v<T::EnumT>;
+	static constexpr bool value = has<int>(0) && std::is_enum_v<typename T::EnumT>;
 };
 
 }
@@ -99,13 +99,22 @@ public:
 
 	/// <summary> Check if any flag is set. </summary>
 	/// <returns> True if not an empty bitset, false if empty. </returns> 
-	explicit operator bool() {
+	explicit operator bool() const {
 		return (UnderlyingT)m_value != 0;
 	}
 
 	/// <summary> Cast to underlying enumeration type. </summary>
 	explicit operator EnumT() {
 		return m_value;
+	}
+
+
+	/// <summary> Return true if no flag is set. </summary>
+	bool Empty() const { return !operator bool(); }
+
+	/// <summary> Returns true if all values of <paramref name="rhs"/> are contained in this. </summary>
+	bool Contains(EnumFlag_Helper rhs) {
+		return (rhs - *this).Empty();
 	}
 private:
 	EnumT m_value;

@@ -1,0 +1,63 @@
+{
+    "header": {
+        "contentType": "pipeline"
+    },
+    "nodes": [
+        {
+            "class": "GetBackBuffer",
+            "id": 0,
+            "name": "BackBuffer",
+            "meta_pos": "[-124, -152]"
+        },
+        {
+            "class": "GetCamera2DByName",
+            "id": 1,
+            "name": "Camera",
+            "inputs": [
+                "GuiCam"
+            ],
+            "meta_pos": "[-125, 4]"
+        },
+        {
+            "class": "RenderOverlay",
+            "id": 2,
+            "name": "Renderer",
+            "meta_pos": "[351, -6]"
+        },
+        {
+            "class": "GetSceneByName",
+            "id": 3,
+            "name": "Scene",
+            "inputs": [
+                "GuiScene"
+            ],
+            "meta_pos": "[-102, 154]"
+        }
+    ],
+    "links": [
+        {
+            "src": "BackBuffer",
+            "dst": "Renderer",
+            "srcp": 0,
+            "dstp": 0
+        },
+        {
+            "src": "Camera",
+            "dst": "Renderer",
+            "srcp": 0,
+            "dstp": 1
+        },
+        {
+            "src": "Scene",
+            "dst": "Renderer",
+            "srcp": 0,
+            "dstp": 2
+        },
+        {
+            "src": "Scene",
+            "dst": "Renderer",
+            "srcp": 0,
+            "dstp": 3
+        }
+    ]
+}

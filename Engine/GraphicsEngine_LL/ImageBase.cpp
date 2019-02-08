@@ -27,7 +27,7 @@ void ImageBase::SetLayout(uint64_t width, uint32_t height, ePixelChannelType cha
 
 
 	Texture2DDesc resdesc(width, height, format, 0, arraySize);
-	Texture2D texture = m_memoryManager->CreateTexture2D(eResourceHeapType::CRITICAL, resdesc);
+	Texture2D texture = m_memoryManager->CreateTexture2D(eResourceHeap::CRITICAL, resdesc);
 
 	// In case this throws an exception changes will be unrolled.
 	CreateResourceView(texture);
@@ -67,7 +67,7 @@ void ImageBase::Update(uint64_t x, uint32_t y, uint64_t width, uint32_t height, 
 		size_t dstPitch = width * structureSize4;
 		size_t srcPitch = bytesPerRow > 0 ? bytesPerRow : width * structureSize;
 		for (size_t y = 0; y < height; ++y) {
-			for (size_t x = 0; x < height; ++x) {
+			for (size_t x = 0; x < width; ++x) {
 				uint8_t* dst = pixels4.get() + (y * dstPitch + x * structureSize4);
 				memcpy(dst, (uint8_t*)pixels + (y * srcPitch + x * structureSize), structureSize);
 				memset(dst + structureSize, 0, channelSize);
@@ -90,7 +90,7 @@ void ImageBase::Update(uint64_t x, uint32_t y, uint64_t width, uint32_t height, 
 }
 
 
-size_t ImageBase::GetWidth() {
+size_t ImageBase::GetWidth() const {
 	if (m_resource) {
 		return m_resource.GetWidth();
 	}
@@ -100,7 +100,7 @@ size_t ImageBase::GetWidth() {
 }
 
 
-size_t ImageBase::GetHeight() {
+size_t ImageBase::GetHeight() const {
 	if (m_resource) {
 		return m_resource.GetHeight();
 	}

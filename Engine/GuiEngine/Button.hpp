@@ -1,25 +1,47 @@
 #pragma once
-#include "Text.hpp"
+
+#include "StandardControl.hpp"
+
+#include <BaseLibrary/Color.hpp>
+#include <BaseLibrary/Event.hpp>
+#include <GraphicsEngine/Resources/IFont.hpp>
+#include <GraphicsEngine/Scene/IOverlayEntity.hpp>
+#include <GraphicsEngine/Scene/ITextEntity.hpp>
+
 
 namespace inl::gui {
 
-class Button : public Gui
-{
+
+class Button : public StandardControl {
 public:
-	Button(GuiEngine* guiEngine);
-	Button(const Button& other):Gui(other.guiEngine) { *this = other; }
+	Button();
 
-	// Important to implement in derived classes
-	virtual Button* Clone() const override { return new Button(*this); }
-	Button& operator = (const Button& other);
+	void SetSize(Vec2 size) override;
+	Vec2 GetSize() const override;
+	Vec2 GetPreferredSize() const override;
+	Vec2 GetMinimumSize() const override;
 
-	void SetText(const std::wstring& text);
-	void SetText(const std::string& text);
+	void SetPosition(Vec2 position) override;
+	Vec2 GetPosition() const override;
 
-	Text* GetText() { return text; }
+	void Update(float elapsed = 0.0f) override;
 
-public:
-	Text* text;
+	// Button specific properties.
+	void SetText(std::u32string text);
+	const std::u32string& GetText() const;
+
+	float SetDepth(float depth) override;
+	float GetDepth() const override;
+	
+protected:
+	std::vector<std::reference_wrapper<std::unique_ptr<gxeng::ITextEntity>>> GetTextEntities() override;
+	std::vector<std::reference_wrapper<std::unique_ptr<gxeng::IOverlayEntity>>> GetOverlayEntities() override;
+
+private:
+	std::unique_ptr<gxeng::ITextEntity> m_text;
+	std::unique_ptr<gxeng::IOverlayEntity> m_background;
+	const gxeng::IFont* m_font = nullptr;
 };
+
 
 } // namespace inl::gui

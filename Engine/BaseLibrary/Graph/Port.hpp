@@ -9,8 +9,10 @@
 #include <memory>
 #include <unordered_map>
 #include <sstream>
+
 #include "../Any.hpp"
 #include "../TemplateUtil.hpp"
+#include "SerializableNode.hpp"
 
 
 namespace inl {
@@ -101,6 +103,27 @@ public:
 };
 
 
+template <class T, bool Readable> 
+class DefaultPortConverter : public PortConverterCollection<T> 
+{};
+
+template <class T>
+class DefaultPortConverter<T, true> : public PortConverterCollection<T> {
+public:
+	DefaultPortConverter() : PortConverterCollection<T>(&FromString) 
+	{}
+protected:
+	static T FromString(const std::string& str) {
+		T val;
+		std::stringstream ss(str);
+		ss >> val;
+		if (!ss.fail()) {
+			throw InvalidArgumentException("String could not be converted to type.");
+		}
+		return val;
+	}
+};
+
 
 /// <summary>
 /// Converts types when passed between output->input ports.
@@ -113,71 +136,8 @@ public:
 ///		method should throw an std::out_of_range. </para>
 /// </summary>
 template <class T>
-class PortConverter : public PortConverterCollection<T> {
-};
-
-
-
-/// <summary>
-/// <para> Input port of a Node. </para>
-/// <para> 
-/// Input ports are attached to a node. An input port can also be linked
-/// to an output port, from where it receives the data.
-/// </para>
-/// </summary>
-class InputPortBase {
-	friend class OutputPortBase;
-	friend class OutputPort<Any>;
-public:
-	InputPortBase();
-	~InputPortBase();
-
-	/// <summary> Clear currently stored data. </summary>
-	virtual void Clear() = 0;
-
-	/// <summary> Get weather any valid data is set. </summary>
-	virtual bool IsSet() const = 0;
-
-	/// <summary> Get typeid of underlying data. </summary>
-	virtual std::type_index GetType() const = 0;
-	/// <summary> Get if can convert from certain type. </summary>
-	virtual bool IsCompatible(std::type_index type) const = 0;
-
-	/// <summary> Link this port to an output port. </summary>
-	/// <returns> True if succesfully linked. Make sures types are compatible. </returns>
-	bool Link(OutputPortBase* source);
-
-	/// <summary> Remove link between this and the other end. </summary>
-	void Unlink();
-
-	/// <summary> Add observer node.
-	/// Observers are notified when new data is set. </summary>
-	virtual void AddObserver(NodeBase* observer) final;
-	/// <summary> Remove observer. </summary>
-	virtual void RemoveObserver(NodeBase* observer) final;
-
-	/// <summary> Get which output port it is linked to. </summary>
-	/// <returns> The other end. Null if not linked. </returns>
-	OutputPortBase* GetLink() const;
-
-	/// <summary> Set type that is to be converted automatically. </summary>
-	template <class U>
-	void SetConvert(const U& u);
-
-	/// <summary> Converts underlying data to string using it's &lt;&lt; operator </summary>
-	/// <exception cref="InvalidCallException"> If no ostream operator available. </summary> 
-	virtual std::string ToString() const = 0;
-protected:
-	OutputPortBase* link;
-	void NotifyAll();
-	virtual void SetConvert(const void* object, std::type_index type) = 0;
-private:
-	// should only be called by an output port when it's ready with building up the linkage
-	// this function only sets internal state of the inputport to represent the link set up by outputport
-	void SetLinkState(OutputPortBase* link);
-
-	std::set<NodeBase*> observers;
-};
+class PortConverter : public DefaultPortConverter<T, templ::is_readable<T>::value> 
+{};
 
 
 
@@ -189,7 +149,8 @@ private:
 /// is forwarded to connected input ports. An output port can be linked
 /// to multiple input ports at the same time.
 /// </para>
-class OutputPortBase {
+/// </summary>
+class OutputPortBase : public ISerializableOutputPort {
 public:
 	using LinkIterator = std::set<InputPortBase*>::iterator;
 	using ConstLinkIterator = std::set<InputPortBase*>::const_iterator;
@@ -202,7 +163,8 @@ public:
 
 	/// <summary> Link to an input port. </summary>
 	/// <returns> True if succesfully linked. Make sures types are compatible. </returns>
-	virtual bool Link(InputPortBase* destination);
+	/// <exception cref="InvalidArgumentException"> In case the other port is already linked or types are incompatible. </exception>
+	void Link(InputPortBase* destination);
 
 	/// <summary> Remove link between this and the other end. </summary>
 	/// <param param="other"> The port to unlink from this. </param>
@@ -211,7 +173,7 @@ public:
 	/// <summary> Unlink all ports from this. </summary>
 	virtual void UnlinkAll();
 
-	//! TODO: add iterator support to iterate over links
+	// Iterate over links.
 	LinkIterator begin();
 	LinkIterator end();
 	ConstLinkIterator begin() const;
@@ -220,6 +182,71 @@ public:
 	ConstLinkIterator cend() const;
 protected:
 	std::set<InputPortBase*> links;
+};
+
+
+
+/// <summary>
+/// <para> Input port of a Node. </para>
+/// <para> 
+/// Input ports are attached to a node. An input port can also be linked
+/// to an output port, from where it receives the data.
+/// </para>
+/// </summary>
+class InputPortBase : public ISerializableInputPort {
+	friend class OutputPortBase;
+	friend class OutputPort<Any>;
+public:
+	InputPortBase();
+	~InputPortBase();
+
+	/// <summary> Clear currently stored data. </summary>
+	virtual void Clear() = 0;
+
+	/// <summary> Get weather any valid data is set. </summary>
+	virtual bool IsSet() const override = 0;
+
+	/// <summary> Get typeid of underlying data. </summary>
+	virtual std::type_index GetType() const = 0;
+	/// <summary> Get if can convert from certain type. </summary>
+	virtual bool IsCompatible(std::type_index type) const = 0;
+
+	/// <summary> Link this port to an output port. </summary>
+	/// <returns> True if succesfully linked. Make sures types are compatible. </returns>
+	/// <exception cref="InvalidStateException"> In case the port is already linked. </exception>
+	/// <exception cref="InvalidArgumentException">  If types are incompatible. </exception>
+	void Link(OutputPortBase* source);
+
+	/// <summary> Remove link between this and the other end. </summary>
+	void Unlink();
+
+	/// <summary> Add observer node.
+	/// Observers are notified when new data is set. </summary>
+	virtual void AddObserver(NodeBase* observer) final;
+	/// <summary> Remove observer. </summary>
+	virtual void RemoveObserver(NodeBase* observer) final;
+
+	/// <summary> Get which output port it is linked to. </summary>
+	/// <returns> The other end. Null if not linked. </returns>
+	OutputPortBase* GetLink() const override;
+
+	/// <summary> Set type that is to be converted automatically. </summary>
+	template <class U>
+	void SetConvert(const U& u);
+
+	/// <summary> Converts underlying data to string using it's &lt;&lt; operator </summary>
+	/// <exception cref="InvalidCallException"> If no ostream operator available. </exception> 
+	virtual std::string ToString() const override = 0;
+protected:
+	OutputPortBase* link;
+	void NotifyAll();
+	virtual void SetConvert(const void* object, std::type_index type) = 0;
+private:
+	// should only be called by an output port when it's ready with building up the linkage
+	// this function only sets internal state of the inputport to represent the link set up by outputport
+	void SetLinkState(OutputPortBase* link);
+
+	std::set<NodeBase*> observers;
 };
 
 
@@ -301,8 +328,9 @@ private:
 };
 
 
-template <class T, class ConverterT = PortConverter<T>>
+template <class T, class ConverterT>
 void InputPort<T, ConverterT>::SetConvert(const void* object, std::type_index type) {
+	isSet = true;
 	if (type == typeid(T)) {
 		data = *reinterpret_cast<const T*>(object);
 	}
@@ -312,7 +340,7 @@ void InputPort<T, ConverterT>::SetConvert(const void* object, std::type_index ty
 }
 
 
-template <class T, class ConverterT = PortConverter<T>>
+template <class T, class ConverterT>
 bool InputPort<T, ConverterT>::IsCompatible(std::type_index type) const {
 	if (type == typeid(T)) {
 		return true;
@@ -402,6 +430,7 @@ public:
 	}
 protected:
 	void SetConvert(const void* object, std::type_index type) override {
+		isSet = true;
 		// conversion does nothing
 	}
 private:

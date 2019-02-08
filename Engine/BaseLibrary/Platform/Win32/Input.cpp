@@ -1,6 +1,8 @@
 #include "Input.hpp"
 #include "../../Exception/Exception.hpp"
 
+#pragma comment(lib, "hid.lib") // No need to put in project files because noone else should use these anywhere else.
+
 
 namespace inl {
 
@@ -14,11 +16,11 @@ Input::Input() {
 Input::Input(size_t deviceId) {
 	m_queueMode = eInputQueueMode::IMMEDIATE;
 	m_queueSize = 10000;
-	RawInputSource::GetInstance()->AddInput(this, deviceId);
+	RawInputSource::GetInstance().AddInput(this, deviceId);
 }
 
 Input::~Input() {
-	RawInputSource::GetInstance()->RemoveInput(this);
+	RawInputSource::GetInstance().RemoveInput(this);
 }
 
 
@@ -83,15 +85,8 @@ std::vector<InputDevice> Input::GetDeviceList() {
 	for (auto& d : list) {
 		InputDevice device;
 		device.id = (size_t)d.hDevice;
-		switch (d.dwType) {
-			case RIM_TYPEKEYBOARD:
-				device.type = eInputSourceType::KEYBOARD; break;
-			case RIM_TYPEMOUSE:
-				device.type = eInputSourceType::MOUSE; break;
-			case RIM_TYPEHID:
-				continue; // currently only keyboard and mouse
-				device.type = eInputSourceType::JOYSTICK; break;
-		}
+
+		// Get device name
 		unsigned dataSize = 0;
 		unsigned result;
 		result = GetRawInputDeviceInfoA(d.hDevice, RIDI_DEVICENAME, nullptr, &dataSize);
@@ -101,10 +96,42 @@ std::vector<InputDevice> Input::GetDeviceList() {
 			device.name = std::string(deviceName.begin(), deviceName.end());
 		}
 
+		// Get device info
+		RID_DEVICE_INFO deviceInfo;
+		UINT _dummy1 = sizeof(deviceInfo);
+		GetRawInputDeviceInfoA(d.hDevice, RIDI_DEVICEINFO, &deviceInfo, &_dummy1);
+
+		// Determine device type
+		if (d.dwType == RIM_TYPEKEYBOARD) {
+			device.type = eInputSourceType::KEYBOARD;
+		}
+		else if (d.dwType == RIM_TYPEMOUSE) {
+			device.type = eInputSourceType::MOUSE;
+		}
+		else if (d.dwType == RIM_TYPEHID && deviceInfo.hid.usUsage == 4 && deviceInfo.hid.usUsagePage == 1) {
+			device.type = eInputSourceType::JOYSTICK; 
+		}
+		else {
+			continue; // Unknown device type should not be listed
+		}
+
+		// Collect list of recognized devices
 		devices.push_back(device);
 	}
 
 	return devices;
+}
+
+
+std::vector<InputDevice> Input::GetDeviceList(eInputSourceType filter) {
+	auto devices = GetDeviceList();
+	std::vector<InputDevice> specificDevices;
+	for (auto& dev : devices) {
+		if (dev.type == filter) {
+			specificDevices.push_back(dev);
+		}
+	}
+	return specificDevices;
 }
 
 
@@ -115,7 +142,7 @@ Input::RawInputSourceBase::RawInputSourceBase() {
 }
 
 Input::RawInputSourceBase::~RawInputSourceBase() {
-	SendMessage(m_messageLoopWindow, WM_CLOSE, 0, 0);
+	PostMessage(m_messageLoopWindow, WM_CLOSE, 0, 0);
 	if (m_messageLoopThread.joinable()) {
 		m_messageLoopThread.join();
 	}
@@ -183,68 +210,118 @@ void Input::RawInputSourceBase::ProcessInput(const RAWINPUT& rawInput) {
 
 	size_t deviceId = reinterpret_cast<size_t>(rawInput.header.hDevice);
 
-	switch (rawInput.header.dwType) {
-		case RIM_TYPEMOUSE: {
-			RAWMOUSE mouse = rawInput.data.mouse;
+	if (rawInput.header.dwType == RIM_TYPEMOUSE) {
+		RAWMOUSE mouse = rawInput.data.mouse;
 
-			POINT point = { 0, 0 };
-			GetCursorPos(&point);
+		POINT point = { 0, 0 };
+		GetCursorPos(&point);
 
-			// Movement events.
-			if ((mouse.usFlags & MOUSE_MOVE_RELATIVE)
-				&& (mouse.lLastX != 0 || mouse.lLastY != 0))
-			{
-				MouseMoveEvent evt;
-				evt.relx = mouse.lLastX;
-				evt.rely = mouse.lLastY;
-				evt.absx = point.x;
-				evt.absy = point.y;
+		// Movement events.
+		if ((mouse.usFlags & MOUSE_MOVE_RELATIVE)
+			&& (mouse.lLastX != 0 || mouse.lLastY != 0))
+		{
+			MouseMoveEvent evt;
+			evt.relx = mouse.lLastX;
+			evt.rely = mouse.lLastY;
+			evt.absx = point.x;
+			evt.absy = point.y;
 
-				CallEvents(deviceId, &Input::OnMouseMove, evt);
+			CallEvents(deviceId, &Input::OnMouseMove, evt);
+		}
+		else {
+			MouseMoveEvent evt;
+			evt.relx = 0;
+			evt.rely = 0;
+			evt.absx = mouse.lLastX;
+			evt.absy = mouse.lLastY;
+
+			CallEvents(deviceId, &Input::OnMouseMove, evt);
+		}
+
+		// Button events.
+		auto CallButtonEvent = [this, &point, deviceId](unsigned short flags, unsigned short checkFlag, eMouseButton btn, eKeyState state) {
+			if (flags & checkFlag) {
+				MouseButtonEvent evt;
+				evt.button = btn;
+				evt.state = state;
+				evt.x = point.x;
+				evt.y = point.y;
+				CallEvents(deviceId, &Input::OnMouseButton, evt);
 			}
-			else {
-				MouseMoveEvent evt;
-				evt.relx = 0;
-				evt.rely = 0;
-				evt.absx = mouse.lLastX;
-				evt.absy = mouse.lLastY;
+		};
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_LEFT_BUTTON_DOWN, eMouseButton::LEFT, eKeyState::DOWN);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_LEFT_BUTTON_UP, eMouseButton::LEFT, eKeyState::UP);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_RIGHT_BUTTON_DOWN, eMouseButton::RIGHT, eKeyState::DOWN);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_RIGHT_BUTTON_UP, eMouseButton::RIGHT, eKeyState::UP);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_MIDDLE_BUTTON_DOWN, eMouseButton::MIDDLE, eKeyState::DOWN);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_MIDDLE_BUTTON_UP, eMouseButton::MIDDLE, eKeyState::UP);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_4_DOWN, eMouseButton::EXTRA1, eKeyState::DOWN);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_4_UP, eMouseButton::EXTRA1, eKeyState::UP);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_5_DOWN, eMouseButton::EXTRA2, eKeyState::DOWN);
+		CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_5_UP, eMouseButton::EXTRA2, eKeyState::UP);
+	}
+	else if (rawInput.header.dwType == RIM_TYPEKEYBOARD) {
+		KeyboardEvent evt;
+		evt.key = impl::TranslateKey(rawInput.data.keyboard.VKey);
+		evt.state = rawInput.data.keyboard.Flags & RI_KEY_BREAK ? eKeyState::UP : eKeyState::DOWN;
 
-				CallEvents(deviceId, &Input::OnMouseMove, evt);
+		CallEvents(deviceId, &Input::OnKeyboard, evt);
+	}
+	else if (rawInput.header.dwType == RIM_TYPEHID) {
+		// Get device info
+		RID_DEVICE_INFO deviceInfo;
+		UINT _dummy1 = sizeof(deviceInfo);
+		GetRawInputDeviceInfoA(rawInput.header.hDevice, RIDI_DEVICEINFO, &deviceInfo, &_dummy1);
+
+		// Joystick
+		if (deviceInfo.hid.usUsage == 4 && deviceInfo.hid.usUsagePage == 1) {
+			auto it = m_joyStates.find(deviceId);
+			if (it == m_joyStates.end()) {
+				auto state = GetJoyInfo(deviceId);
+				it = m_joyStates.insert({ deviceId, state }).first;
 			}
+			JoyState& state = it->second;
 
-			// Button events.
-			auto CallButtonEvent = [this, &point, deviceId](unsigned short flags, unsigned short checkFlag, eMouseButton btn, eKeyState state) {
-				if (flags & checkFlag) {
-					MouseButtonEvent evt;
-					evt.button = btn;
-					evt.state = state;
-					evt.x = point.x;
-					evt.y = point.y;
-					CallEvents(deviceId, &Input::OnMouseButton, evt);
+			PHIDP_PREPARSED_DATA preparsedData = (PHIDP_PREPARSED_DATA)state.preparsedBuffer.data();
+
+			// Get button states.
+			/*
+			HidP_GetUsages(HidP_Input,
+				buttonCaps.data()->UsagePage,
+				0,
+				usages.data(),
+				&usageLength,
+				preparsedData,
+				(PCHAR)rawInput.data.hid.bRawData,
+				rawInput.data.hid.dwSizeHid);
+
+			std::vector<bool> buttonStates(caps.NumberInputButtonCaps, false);
+			for (int i = 0; i < usageLength; i++) {
+				buttonStates[usages[i] - buttonCaps.data()->Range.UsageMin] = true;
+			}
+			*/
+
+			// Get axis states.
+			ULONG value;
+			for (int i=0; i<state.valueCaps.size(); ++i) {
+				HidP_GetUsageValue(HidP_Input,
+					state.valueCaps[i].UsagePage,
+					0,
+					state.valueCaps[i].Range.UsageMin,
+					&value,
+					preparsedData,
+					(PCHAR)rawInput.data.hid.bRawData,
+					rawInput.data.hid.dwSizeHid);
+
+				float normalizedValue = -1.f + 2.f*(value - state.valueCaps[i].PhysicalMin)/(state.valueCaps[i].PhysicalMax - state.valueCaps[i].PhysicalMin);
+				if (normalizedValue != state.valueStates[i]) {
+					JoystickMoveEvent evt;
+					evt.axis = i;
+					evt.absPos = normalizedValue;
+					CallEvents(deviceId, &Input::OnJoystickMove, evt);
 				}
-			};
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_LEFT_BUTTON_DOWN, eMouseButton::LEFT, eKeyState::DOWN);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_LEFT_BUTTON_UP, eMouseButton::LEFT, eKeyState::UP);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_RIGHT_BUTTON_DOWN, eMouseButton::RIGHT, eKeyState::DOWN);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_RIGHT_BUTTON_UP, eMouseButton::RIGHT, eKeyState::UP);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_MIDDLE_BUTTON_DOWN, eMouseButton::MIDDLE, eKeyState::DOWN);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_MIDDLE_BUTTON_UP, eMouseButton::MIDDLE, eKeyState::UP);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_4_DOWN, eMouseButton::EXTRA1, eKeyState::DOWN);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_4_UP, eMouseButton::EXTRA1, eKeyState::UP);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_5_DOWN, eMouseButton::EXTRA2, eKeyState::DOWN);
-			CallButtonEvent(mouse.usButtonFlags, RI_MOUSE_BUTTON_5_UP, eMouseButton::EXTRA2, eKeyState::UP);
-			break;
-		}
-		case RIM_TYPEKEYBOARD: {
-			KeyboardEvent evt;
-			evt.key = impl::TranslateKey(rawInput.data.keyboard.VKey);
-			evt.state = rawInput.data.keyboard.Flags & RI_KEY_BREAK ? eKeyState::UP : eKeyState::DOWN;
-
-			CallEvents(deviceId, &Input::OnKeyboard, evt);
-			break;
-		}
-		case RIM_TYPEHID: {
-			break;
+				state.valueStates[i] = normalizedValue;
+			}
 		}
 	}
 }
@@ -267,7 +344,7 @@ void Input::RawInputSourceBase::MessageLoopThreadFunc() {
 	HWND hwnd = CreateWindowA("INL_INPUT_CAPTURE",
 		"Inl input capture",
 		WS_OVERLAPPEDWINDOW,
-		0, 0, 10, 10,
+		0, 0, 100, 100,
 		NULL,
 		NULL,
 		GetModuleHandle(NULL),
@@ -282,28 +359,75 @@ void Input::RawInputSourceBase::MessageLoopThreadFunc() {
 	UpdateWindow(hwnd);
 
 	// Register for raw input.
-	RAWINPUTDEVICE Rid[2];
+	RAWINPUTDEVICE Rid[3];
 
 	Rid[0].usUsagePage = 0x01;
 	Rid[0].usUsage = 0x02;
-	Rid[0].dwFlags = RIDEV_NOLEGACY | RIDEV_INPUTSINK;   // adds HID mouse and also ignores legacy mouse messages
+	Rid[0].dwFlags = RIDEV_INPUTSINK;   // adds HID mouse and also ignores legacy mouse messages
 	Rid[0].hwndTarget = m_messageLoopWindow;
 
 	Rid[1].usUsagePage = 0x01;
 	Rid[1].usUsage = 0x06;
-	Rid[1].dwFlags = RIDEV_NOLEGACY | RIDEV_INPUTSINK;   // adds HID keyboard and also ignores legacy keyboard messages
+	Rid[1].dwFlags = RIDEV_INPUTSINK;   // adds HID keyboard and also ignores legacy keyboard messages
 	Rid[1].hwndTarget = m_messageLoopWindow;
 
-	if (RegisterRawInputDevices(Rid, 2, sizeof(Rid[0])) == FALSE) {
+	Rid[2].usUsagePage = 0x01;
+	Rid[2].usUsage = 0x04;
+	Rid[2].dwFlags = RIDEV_INPUTSINK;   // adds HID joystick
+	Rid[2].hwndTarget = m_messageLoopWindow;
+
+	if (RegisterRawInputDevices(Rid, 3, sizeof(Rid[0])) == FALSE) {
 		throw RuntimeException("Could not register for raw input.");
 	}
 
 	// Start processing raw input messages.
 	MSG msg;
-	while (GetMessage(&msg, NULL, 0, 0) != 0) {
+	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+}
+
+
+Input::RawInputSourceBase::JoyState Input::RawInputSourceBase::GetJoyInfo(size_t deviceId) {
+	HANDLE hDevice = (HANDLE)deviceId;
+	UINT bufferSize;
+
+	// Get preparsed data from HID input.
+	if (GetRawInputDeviceInfo(hDevice, RIDI_PREPARSEDDATA, NULL, &bufferSize) != 0) {
+		// error
+	}
+	std::vector<uint8_t> preparsedDataBuffer(bufferSize);
+	PHIDP_PREPARSED_DATA preparsedData = reinterpret_cast<PHIDP_PREPARSED_DATA>(preparsedDataBuffer.data());
+	if ((int)GetRawInputDeviceInfo(hDevice, RIDI_PREPARSEDDATA, preparsedDataBuffer.data(), &bufferSize) < 0) {
+		// error
+	}
+
+	// Get button and axis caps.
+	HIDP_CAPS caps;
+	HidP_GetCaps(preparsedData, &caps);
+	USHORT capsLength;
+
+	capsLength = caps.NumberInputButtonCaps;
+	std::vector<HIDP_BUTTON_CAPS> buttonCaps(caps.NumberInputButtonCaps);
+	HidP_GetButtonCaps(HidP_Input, buttonCaps.data(), &capsLength, preparsedData);
+
+	capsLength = caps.NumberInputValueCaps;
+	std::vector<HIDP_VALUE_CAPS> valueCaps(caps.NumberInputValueCaps);
+	HidP_GetValueCaps(HidP_Input, valueCaps.data(), &capsLength, preparsedData);
+
+	ULONG usageLength = buttonCaps.data()->Range.UsageMax - buttonCaps.data()->Range.UsageMin + 1;
+	std::vector<USAGE> usages(caps.NumberInputButtonCaps);
+
+	// Output
+	JoyState state;
+	state.buttonStates.resize(0, false);
+	state.valueStates.resize(caps.NumberInputValueCaps, 0.0f);
+	state.preparsedBuffer = std::move(preparsedDataBuffer);
+	state.buttonCaps = std::move(buttonCaps);
+	state.valueCaps = std::move(valueCaps);
+
+	return state;
 }
 
 

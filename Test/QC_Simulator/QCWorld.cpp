@@ -6,31 +6,50 @@
 #include "AreaTex.h"
 #include "SearchTex.h"
 
+#include  <GraphicsEngine_LL/MaterialShader.hpp>
+
 #include <array>
 #include <random>
+#include <iomanip>
+
+#ifdef _MSC_VER
+#pragma warning(disable: 4267)
+#endif
 
 inline float rand2() {
 	return (rand() / float(RAND_MAX)) * 2 - 1;
 }
 
+#ifndef INL_ASSET_DIRECTORY
+#define INL_ASSET_DIRECTORY "assets"
+#endif
+#ifndef INL_NODE_SHADER_DIRECTORY
+#define INL_NODE_SHADER_DIRECTORY "../../Engine/GraphicsEngine_LL/Nodes/Shaders"
+#endif
+#ifndef INL_MTL_SHADER_DIRECTORY
+#define INL_MTL_SHADER_DIRECTORY "../../Engine/GraphicsEngine_LL/Materials"
+#endif
+
 QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	using namespace inl::gxeng;
 
 	m_graphicsEngine = graphicsEngine;
+	m_graphicsEngine->SetShaderDirectories({ INL_NODE_SHADER_DIRECTORY, INL_MTL_SHADER_DIRECTORY, "./Shaders", "./Materials" });
 
 	//Create gui
 	{
 		unsigned width, height;
 		m_guiScene.reset(m_graphicsEngine->CreateScene("Gui"));
-		m_guiCamera.reset(m_graphicsEngine->CreateOrthographicCamera("GuiCamera"));
+		m_guiCamera.reset(m_graphicsEngine->CreateCamera2D("GuiCamera"));
 		graphicsEngine->GetScreenSize(width, height);
-		m_guiCamera->SetBounds(0, width, height, 0, -1, 1);
+		m_guiCamera->SetExtent({ width, height });
+		m_guiCamera->SetPosition(m_guiCamera->GetExtent()/2);
 
 		std::vector<inl::gxeng::Vertex<Position<0>, TexCoord<0>>> vertices(4);
-		vertices[0].position = inl::Vec3(0, 0, 0);
-		vertices[1].position = inl::Vec3(0, 1, 0);
+		vertices[0].position = inl::Vec3(-1, -1, 0);
+		vertices[1].position = inl::Vec3(-1, 1, 0);
 		vertices[2].position = inl::Vec3(1, 1, 0);
-		vertices[3].position = inl::Vec3(1, 0, 0);
+		vertices[3].position = inl::Vec3(1, -1, 0);
 
 		vertices[0].texCoord = inl::Vec2(0, 0);
 		vertices[1].texCoord = inl::Vec2(0, 1);
@@ -43,7 +62,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		m_overlayQuadMesh->Set(vertices.data(), &vertices[0].GetReader(), vertices.size(), indices.data(), indices.size());
 
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 4, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\overlay.png");
+		inl::asset::Image img(AssetPath("overlay.png"));
 		m_overlayTexture.reset(m_graphicsEngine->CreateImage());
 		m_overlayTexture->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 4, ePixelClass::LINEAR);
 		m_overlayTexture->Update(0, 0, img.GetWidth(), img.GetHeight(), 0, img.GetData(), PixelT::Reader());
@@ -52,13 +71,45 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 
 		element.reset(m_graphicsEngine->CreateOverlayEntity());
 		element->SetMesh(m_overlayQuadMesh.get());
-		element->SetScale({ (float)img.GetWidth()*0.75f, (float)img.GetHeight()*0.75f });
-		element->SetTexture(m_overlayTexture.get());
+		element->SetScale({ 200/2, 40/2 });
+		element->SetPosition({ 400, 30 });
+		//element->SetTexture(m_overlayTexture.get());
+		element->SetColor({ 0.2,0.2,0.2,1 });
+		element->SetZDepth(-1);
 		m_overlayElements.push_back(std::move(element));
 
 		for (auto& curr : m_overlayElements) {
-			m_guiScene->GetOverlayEntities().Add(curr.get());
+			m_guiScene->GetEntities<OverlayEntity>().Add(curr.get());
 		}
+
+		// Create text rendering
+		m_font.reset(m_graphicsEngine->CreateFont());
+		std::ifstream fontFile(R"(C:\Windows\Fonts\calibri.ttf)", std::ios::binary);
+		m_font->LoadFile(fontFile);
+		m_infoText.reset(m_graphicsEngine->CreateTextEntity());
+		m_infoText->SetColor({ 1,1,1,1 });
+		m_infoText->SetFont(m_font.get());
+		m_infoText->SetFontSize(16.0f);
+		m_infoText->SetPosition({ 400, 30 });
+		m_infoText->SetScale({ 1.f, 1.f });
+		m_infoText->SetSize({ 200, 40 });
+		m_infoText->SetZDepth(1);
+		m_infoText->SetHorizontalAlignment(TextEntity::ALIGN_LEFT);
+		m_infoText->SetVerticalAlignment(TextEntity::ALIGN_CENTER);
+
+		m_fideszText.reset(m_graphicsEngine->CreateTextEntity());
+		m_fideszText->SetColor({ 1,0.5,0,1 });
+		m_fideszText->SetFont(m_font.get());
+		m_fideszText->SetFontSize(48.0f);
+		m_fideszText->SetPosition({ width/2.0f, height/2.0f });
+		m_fideszText->SetScale({ 1.f, 1.f });
+		m_fideszText->SetSize({ 600, 60 });
+		m_fideszText->SetZDepth(2);
+		m_fideszText->SetText(U"Csak a FIDESZ!!!444");
+		m_fideszText->SetHorizontalAlignment(TextEntity::ALIGN_CENTER);
+		m_fideszText->SetVerticalAlignment(TextEntity::ALIGN_CENTER);
+		
+		m_guiScene->GetEntities<TextEntity>().Add(m_infoText.get());
 
 		// Set world render transform
 		m_graphicsEngine->SetEnvVariable("world_render_pos", inl::Any(inl::Vec2(0.f, 0.f)));
@@ -68,11 +119,9 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	
 	// Create scene and camera
 	m_worldScene.reset(m_graphicsEngine->CreateScene("World"));
-	//m_sun.SetColor({1.0f, 0.63f, 0.46f});
-	//m_sun.SetDirection({ 0.8f, -0.7f, -0.15f });
 	m_sun.SetColor({1.0f, 0.9f, 0.85f});
 	m_sun.SetDirection({ 0.8f, -0.7f, -0.9f });
-	m_worldScene->GetDirectionalLights().Add(&m_sun);
+	m_worldScene->GetEntities<DirectionalLight>().Add(&m_sun);
 	m_camera.reset(m_graphicsEngine->CreatePerspectiveCamera("WorldCam"));
 	m_camera->SetTargeted(true);
 	m_camera->SetTarget({ 0, 0, 0 });
@@ -85,7 +134,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 
 	// Create terrain mesh
 	{
-		inl::asset::Model model("assets\\terrain.fbx");
+		inl::asset::Model model(AssetPath("terrain.fbx"));
 
 		auto modelVertices = model.GetVertices<Position<0>, Normal<0>, TexCoord<0>>(0, coordSysLayout);
 		std::vector<unsigned> modelIndices = model.GetIndices(0);
@@ -97,7 +146,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create terrain texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\terrain.jpg");
+		inl::asset::Image img(AssetPath("terrain.jpg"));
 
 		m_terrainTexture.reset(m_graphicsEngine->CreateImage());
 		m_terrainTexture->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR);
@@ -106,7 +155,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 
 	// Create sphere mesh
 	{
-		inl::asset::Model model("assets\\sphere\\sphere.fbx");
+		inl::asset::Model model(AssetPath("sphere\\sphere.fbx"));
 
 		auto modelVertices = model.GetVertices<Position<0>, Normal<0>, TexCoord<0>>(0, coordSysLayout);
 		std::vector<unsigned> modelIndices = model.GetIndices(0);
@@ -118,7 +167,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create sphere albedo texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 4, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\sphere\\rustedIronAlbedo.png");
+		inl::asset::Image img(AssetPath("sphere\\rustedIronAlbedo.png"));
 
 		m_sphereAlbedoTex.reset(m_graphicsEngine->CreateImage());
 		m_sphereAlbedoTex->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 4, ePixelClass::LINEAR);
@@ -128,7 +177,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create sphere normal texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\sphere\\rustedIronNormal.png");
+		inl::asset::Image img(AssetPath("sphere\\rustedIronNormal.png"));
 
 		m_sphereNormalTex.reset(m_graphicsEngine->CreateImage());
 		m_sphereNormalTex->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR);
@@ -138,7 +187,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create sphere metalness texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 1, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\sphere\\rustedIronMetalness.png");
+		inl::asset::Image img(AssetPath("sphere\\rustedIronMetalness.png"));
 
 		m_sphereMetalnessTex.reset(m_graphicsEngine->CreateImage());
 		m_sphereMetalnessTex->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 1, ePixelClass::LINEAR);
@@ -148,7 +197,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create sphere roughness texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 1, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\sphere\\rustedIronRoughness.png");
+		inl::asset::Image img(AssetPath("sphere\\rustedIronRoughness.png"));
 
 		m_sphereRoughnessTex.reset(m_graphicsEngine->CreateImage());
 		m_sphereRoughnessTex->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 1, ePixelClass::LINEAR);
@@ -158,7 +207,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create sphere AO texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\sphere\\rustedIronAO.png");
+		inl::asset::Image img(AssetPath("sphere\\rustedIronAO.png"));
 
 		m_sphereAOTex.reset(m_graphicsEngine->CreateImage());
 		m_sphereAOTex->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR);
@@ -167,7 +216,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 
 	// Create QC mesh
 	{
-		inl::asset::Model model("assets\\quadcopter.fbx");
+		inl::asset::Model model(AssetPath("quadcopter.fbx"));
 
 		auto modelVertices = model.GetVertices<Position<0>, Normal<0>, TexCoord<0>>(0, coordSysLayout);
 		std::vector<unsigned> modelIndices = model.GetIndices(0);
@@ -179,7 +228,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create QC texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\axes.jpg");
+		inl::asset::Image img(AssetPath("axes.jpg"));
 
 		m_axesTexture.reset(m_graphicsEngine->CreateImage());
 		m_axesTexture->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR);
@@ -188,7 +237,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 
 	// Create axes mesh
 	{
-		inl::asset::Model model("assets\\axes.fbx");
+		inl::asset::Model model(AssetPath("axes.fbx"));
 
 		auto modelVertices = model.GetVertices<Position<0>, Normal<0>, TexCoord<0>>(0, { inl::asset::AxisDir::POS_Z, inl::asset::AxisDir::POS_Y, inl::asset::AxisDir::POS_X });
 		std::vector<unsigned> modelIndices = model.GetIndices(0);
@@ -200,7 +249,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create axes texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\quadcopter.jpg");
+		inl::asset::Image img(AssetPath("quadcopter.jpg"));
 
 		m_quadcopterTexture.reset(m_graphicsEngine->CreateImage());
 		m_quadcopterTexture->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR);
@@ -209,7 +258,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 
 	// Create tree mesh
 	{
-		inl::asset::Model model("assets\\pine_tree.fbx");
+		inl::asset::Model model(AssetPath("pine_tree.fbx"));
 
 		auto modelVertices = model.GetVertices<Position<0>, Normal<0>, TexCoord<0>>(0, coordSysLayout);
 		std::vector<unsigned> modelIndices = model.GetIndices(0);
@@ -221,11 +270,32 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	// Create tree texture
 	{
 		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\pine_tree.jpg");
+		inl::asset::Image img(AssetPath("pine_tree.jpg"));
 
 		m_treeTexture.reset(m_graphicsEngine->CreateImage());
 		m_treeTexture->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR);
 		m_treeTexture->Update(0, 0, img.GetWidth(), img.GetHeight(), 0, img.GetData(), PixelT::Reader());
+	}
+
+	// Create billboard mesh
+	{
+		inl::asset::Model model(AssetPath("soros/billboard.fbx"));
+
+		auto modelVertices = model.GetVertices<Position<0>, Normal<0>, TexCoord<0>>(0, coordSysLayout);
+		std::vector<unsigned> modelIndices = model.GetIndices(0);
+
+		m_billboardMesh.reset(m_graphicsEngine->CreateMesh());
+		m_billboardMesh->Set(modelVertices.data(), &modelVertices[0].GetReader(), modelVertices.size(), modelIndices.data(), modelIndices.size());
+	}
+
+	// Create billboard texture
+	{
+		using PixelT = Pixel<ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR>;
+		inl::asset::Image img(AssetPath("soros/plakat1.jpg"));
+
+		m_billboardSorosTex.reset(m_graphicsEngine->CreateImage());
+		m_billboardSorosTex->SetLayout(img.GetWidth(), img.GetHeight(), ePixelChannelType::INT8_NORM, 3, ePixelClass::LINEAR);
+		m_billboardSorosTex->Update(0, 0, img.GetWidth(), img.GetHeight(), 0, img.GetData(), PixelT::Reader());
 	}
 
 	// Create materials
@@ -235,6 +305,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		m_axesMaterial.reset(m_graphicsEngine->CreateMaterial());
 		m_terrainMaterial.reset(m_graphicsEngine->CreateMaterial());
 		m_sphereMaterial.reset(m_graphicsEngine->CreateMaterial());
+		m_billboardMaterial.reset(m_graphicsEngine->CreateMaterial());
 
 		m_simpleShader.reset(m_graphicsEngine->CreateMaterialShaderGraph());
 		m_pbrShader.reset(m_graphicsEngine->CreateMaterialShaderGraph());
@@ -245,42 +316,40 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		std::unique_ptr<inl::gxeng::MaterialShaderEquation> diffuseShader(m_graphicsEngine->CreateMaterialShaderEquation());
 		std::unique_ptr<inl::gxeng::MaterialShaderEquation> pbrShader(m_graphicsEngine->CreateMaterialShaderEquation());
 
-		mapShader->SetSourceName("bitmap_color_2d.mtl");
-		map2Shader->SetSourceName("bitmap_color_2d.mtl");
-		map3Shader->SetSourceName("bitmap_roughness_2d.mtl");
-		map4Shader->SetSourceName("bitmap_metalness_2d.mtl");
-		diffuseShader->SetSourceName("simple_diffuse.mtl");
-		pbrShader->SetSourceName("pbr.mtl");
+		mapShader->SetSourceFile("BitmapColor2D.mtl");
+		map2Shader->SetSourceFile("BitmapColor2D.mtl");
+		map3Shader->SetSourceFile("BitmapRoughness2D.mtl");
+		map4Shader->SetSourceFile("BitmapMetalness2D.mtl");
+		diffuseShader->SetSourceFile("SimpleDiffuse.mtl");
+		pbrShader->SetSourceFile("pbr.mtl");
 
 		std::vector<std::unique_ptr<inl::gxeng::MaterialShader>> nodes;
+		mapShader->GetOutput(0)->Link(diffuseShader->GetInput(0));
 		nodes.push_back(std::move(mapShader));
 		nodes.push_back(std::move(diffuseShader));
-
-		/*
-		Pass nodes in first argument.
-		Pass links between nodes in second argument.
-		First link element is the source node ID (single output)
-		Second link element is the dest node ID
-		Third link element is the dest node's dest port ID (single output will be connected to this)
-		*/
-		m_simpleShader->SetGraph(std::move(nodes), { {0, 1, 0} });
+		m_simpleShader->SetGraph(std::move(nodes));
 		m_treeMaterial->SetShader(m_simpleShader.get());
 		m_quadcopterMaterial->SetShader(m_simpleShader.get());
 		m_axesMaterial->SetShader(m_simpleShader.get());
 		m_terrainMaterial->SetShader(m_simpleShader.get());
+		m_billboardMaterial->SetShader(m_simpleShader.get());
 
 		std::vector<std::unique_ptr<inl::gxeng::MaterialShader>> nodes2;
+		map2Shader->GetOutput(0)->Link(pbrShader->GetInput(0));
+		map3Shader->GetOutput(0)->Link(pbrShader->GetInput(1));
+		map4Shader->GetOutput(0)->Link(pbrShader->GetInput(2));
 		nodes2.push_back(std::move(pbrShader));
 		nodes2.push_back(std::move(map2Shader));
 		nodes2.push_back(std::move(map3Shader));
 		nodes2.push_back(std::move(map4Shader));
-		m_pbrShader->SetGraph(std::move(nodes2), { { 1, 0, 0 }, { 2, 0, 1 }, { 3, 0, 2 } });
+		m_pbrShader->SetGraph(std::move(nodes2));
 		m_sphereMaterial->SetShader(m_pbrShader.get());
 
 		(*m_treeMaterial)[0] = m_treeTexture.get();
 		(*m_quadcopterMaterial)[0] = m_quadcopterTexture.get();
 		(*m_axesMaterial)[0] = m_axesTexture.get();
 		(*m_terrainMaterial)[0] = m_terrainTexture.get();
+		(*m_billboardMaterial)[0] = m_billboardSorosTex.get();
 
 		(*m_sphereMaterial)[0] = m_sphereAlbedoTex.get();
 		(*m_sphereMaterial)[1] = m_sphereRoughnessTex.get();
@@ -309,7 +378,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	m_terrainEntity->SetPosition({ 0,0,0 });
 	m_terrainEntity->SetRotation({ 1,0,0,0 });
 	m_terrainEntity->SetScale({ 1,1,1 });
-	m_worldScene->GetMeshEntities().Add(m_terrainEntity.get());
+	m_worldScene->GetEntities<MeshEntity>().Add(m_terrainEntity.get());
 
 	/**
 	// Set up sphere
@@ -337,7 +406,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		sphere->SetPosition({ 0.1, -1.44 + 3.3, 0.0 });
 		sphere->SetRotation({ 1,0,0,0 });
 		sphere->SetScale({ 0.5,0.5,0.5 });
-		m_worldScene->GetMeshEntities().Add(sphere.get());
+		m_worldScene->GetEntities<MeshEntity>().Add(sphere.get());
 		m_staticEntities.push_back(std::move(sphere));
 	}
 	{
@@ -349,7 +418,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		sphere->SetPosition({ 0.1+1.0, -1.44 + 3.3, 0.0 });
 		sphere->SetRotation({ 1,0,0,0 });
 		sphere->SetScale({ 0.5,0.5,0.5 });
-		m_worldScene->GetMeshEntities().Add(sphere.get());
+		m_worldScene->GetEntities<MeshEntity>().Add(sphere.get());
 		m_staticEntities.push_back(std::move(sphere));
 	}
 	{
@@ -361,7 +430,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		sphere->SetPosition({ 0.1 - 1.0, -1.44 + 3.3, 0.0 });
 		sphere->SetRotation({ 1,0,0,0 });
 		sphere->SetScale({ 0.5,0.5,0.5 });
-		m_worldScene->GetMeshEntities().Add(sphere.get());
+		m_worldScene->GetEntities<MeshEntity>().Add(sphere.get());
 		m_staticEntities.push_back(std::move(sphere));
 	}
 	{
@@ -373,7 +442,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		sphere->SetPosition({ 0.1 + 0.5, -1.44 + 3.3, 0.0 + 0.75 });
 		sphere->SetRotation({ 1,0,0,0 });
 		sphere->SetScale({ 0.5,0.5,0.5 });
-		m_worldScene->GetMeshEntities().Add(sphere.get());
+		m_worldScene->GetEntities<MeshEntity>().Add(sphere.get());
 		m_staticEntities.push_back(std::move(sphere));
 	}
 	{
@@ -385,7 +454,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		sphere->SetPosition({ 0.1 - 0.5, -1.44 + 3.3, 0.0 + 0.75 });
 		sphere->SetRotation({ 1,0,0,0 });
 		sphere->SetScale({ 0.5,0.5,0.5 });
-		m_worldScene->GetMeshEntities().Add(sphere.get());
+		m_worldScene->GetEntities<MeshEntity>().Add(sphere.get());
 		m_staticEntities.push_back(std::move(sphere));
 	}
 	{
@@ -397,7 +466,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 		sphere->SetPosition({ 0.1, -1.44 + 3.3, 0.0 + 1.5 });
 		sphere->SetRotation({ 1,0,0,0 });
 		sphere->SetScale({ 0.5,0.5,0.5 });
-		m_worldScene->GetMeshEntities().Add(sphere.get());
+		m_worldScene->GetEntities<MeshEntity>().Add(sphere.get());
 		m_staticEntities.push_back(std::move(sphere));
 	}
 	/**/
@@ -409,7 +478,7 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	m_quadcopterEntity->SetPosition({ 0,0,-3 });
 	m_quadcopterEntity->SetRotation({ 1,0,0,0 });
 	m_quadcopterEntity->SetScale({ 1,1,1 });
-	m_worldScene->GetMeshEntities().Add(m_quadcopterEntity.get());
+	m_worldScene->GetEntities<MeshEntity>().Add(m_quadcopterEntity.get());
 
 	// Set up axes
 	m_axesEntity.reset(m_graphicsEngine->CreateMeshEntity());
@@ -429,15 +498,32 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 	AddTree({ 8, 14, 0 });
 	AddTree({ 9, -12, 0 });
 
+
+	// Set up Soros
+	m_billboardEntity.reset(m_graphicsEngine->CreateMeshEntity());
+	m_billboardEntity->SetMesh(m_billboardMesh.get());
+	m_billboardEntity->SetMaterial(m_billboardMaterial.get());
+	m_billboardEntity->SetPosition({ -3, 8, 1.8 });
+	m_billboardEntity->SetRotation(Quat::AxisAngle(Vec3{ 0,0,1 }, 0.4f));
+
+	m_billboardEntity2.reset(m_graphicsEngine->CreateMeshEntity());
+	m_billboardEntity2->SetMesh(m_billboardMesh.get());
+	m_billboardEntity2->SetMaterial(m_billboardMaterial.get());
+	m_billboardEntity2->SetPosition({ 7, 7, 1.8 });
+	m_billboardEntity2->SetRotation(Quat::AxisAngle(Vec3{ 0,0,1 }, -1.3f));
+
+	m_worldScene->GetEntities<MeshEntity>().Add(m_billboardEntity.get());
+	m_worldScene->GetEntities<MeshEntity>().Add(m_billboardEntity2.get());
+
 	// Set up simulation
 	m_rigidBody.SetPosition({0, 0, 1});
 	m_rigidBody.SetRotation({ 1, 0, 0, 0 });
 
 	// copter parameters
 	float m = 2;
-	float Ixx = 0.026;
-	float Iyy = 0.024;
-	float Izz = 0.048;
+	float Ixx = 0.026f;
+	float Iyy = 0.024f;
+	float Izz = 0.048f;
 	inl::Mat33 I = {
 		Ixx, 0, 0,
 		0, Iyy, 0,
@@ -452,29 +538,45 @@ QCWorld::QCWorld(inl::gxeng::GraphicsEngine* graphicsEngine) {
 
 void QCWorld::UpdateWorld(float elapsed) {
 	// Update QC heading
-	m_rotorInfo.heading += 2.0f*((int)m_rotorInfo.rotateLeft - (int)m_rotorInfo.rotateRight)*elapsed;
+	m_rotorInfo.heading += 2.0f*(m_rotorInfo.rotateLeft - m_rotorInfo.rotateRight)*elapsed;
 
 	// Update simulation
+	float simulationStep = Clamp(elapsed, 0.001f, 0.5f);
+	int numSubiters = 1;
+	if (simulationStep > 0.02f) {
+		numSubiters = int(ceil(simulationStep/0.02f) + 0.1);
+		simulationStep = simulationStep/numSubiters;
+	}
 	bool controller = true;
-	if (!controller) {
-		inl::Vec4 rpm = m_rotorInfo.RPM(m_rotor);
-		inl::Vec3 force;
-		inl::Vec3 torque;
-		m_rotor.SetRPM(rpm, force, torque);
-		m_rigidBody.Update(elapsed, force, torque);
+	for (int i=0; i<numSubiters; ++i) {
+		if (!controller) {
+			inl::Vec4 rpm = m_rotorInfo.RPM(m_rotor);
+			inl::Vec3 force;
+			inl::Vec3 torque;
+			m_rotor.SetRPM(rpm, force, torque);
+			m_rigidBody.Update(simulationStep, force, torque);
+		}
+		else {
+			inl::Quat orientation = m_rotorInfo.Orientation();
+			inl::Quat q = m_rigidBody.GetRotation();
+			inl::Vec3 force;
+			inl::Vec3 torque;
+			inl::Vec4 rpm;
+			float lift = 2.0f * 9.81f + 5.f*(m_rotorInfo.ascend - m_rotorInfo.descend);
+			m_controller.Update(orientation, lift, q, m_rigidBody.GetAngularVelocity(), simulationStep, force, torque);
+			m_rotor.SetTorque(force, torque, rpm);
+			m_rotor.SetRPM(rpm, force, torque);
+			m_rigidBody.Update(simulationStep, force, torque);
+		}	
 	}
-	else {
-		inl::Quat orientation = m_rotorInfo.Orientation();
-		inl::Quat q = m_rigidBody.GetRotation();
-		inl::Vec3 force;
-		inl::Vec3 torque;
-		inl::Vec4 rpm;
-		float lift = 2.0f * 9.81 + 5.f*((int)m_rotorInfo.ascend - (int)m_rotorInfo.descend);
-		m_controller.Update(orientation, lift, q, m_rigidBody.GetAngularVelocity(), elapsed, force, torque);
-		m_rotor.SetTorque(force, torque, rpm);
-		m_rotor.SetRPM(rpm, force, torque);
-		m_rigidBody.Update(elapsed, force, torque);
-	}
+
+	float speed = m_rigidBody.GetVelocity().Length();
+	float altitude = m_rigidBody.GetPosition().z;
+	std::stringstream infoString;
+	infoString << std::setprecision(4);
+	infoString << "Speed: " << speed*3.6f << " km/h, Alt.: " << altitude << " m";
+	m_infoText->SetText(EncodeString<char32_t>(infoString.str()));
+
 
 	// Move quadcopter entity
 	m_quadcopterEntity->SetPosition(m_rigidBody.GetPosition());
@@ -482,6 +584,22 @@ void QCWorld::UpdateWorld(float elapsed) {
 
 	m_axesEntity->SetPosition(m_quadcopterEntity->GetPosition());
 	m_axesEntity->SetRotation(m_rotorInfo.Orientation());
+
+	// Update fidesz text
+	if (Distance(m_quadcopterEntity->GetPosition(), m_billboardEntity->GetPosition()) < 3.f
+		|| Distance(m_quadcopterEntity->GetPosition(), m_billboardEntity2->GetPosition()) < 3.f) 
+	{
+		if (!m_textFlashing) {
+			m_guiScene->GetEntities<gxeng::TextEntity>().Add(m_fideszText.get());
+		}
+		m_textFlashing = true;
+	}
+	else {
+		if (m_textFlashing) {
+			m_guiScene->GetEntities<gxeng::TextEntity>().Remove(m_fideszText.get());
+		}
+		m_textFlashing = false;
+	}
 
 	// Follow copter with camera
 	inl::Vec3 frontDir = m_rigidBody.GetRotation() * inl::Vec3{ 0, 1, 0 };
@@ -491,16 +609,18 @@ void QCWorld::UpdateWorld(float elapsed) {
 	inl::Vec3 viewDir = (5*frontDir.LengthSquared() > upDir.LengthSquared()) ? frontDir.Normalized() : upDir.Normalized();
 	m_camera->SetTarget(m_rigidBody.GetPosition());
 	m_camera->SetPosition(m_rigidBody.GetPosition() + (-viewDir * 1.5 + inl::Vec3{ 0,0,-lookTilt }).Normalized() * 1.5f);
-	//m_camera->SetTarget({ 0,0,0 });
-	//static float time = 0;
-	//time += elapsed / 3;
-	//m_camera->SetPosition(inl::Vec3{cos(time), sin(time), 0.5f}*10.f);
+
+	unsigned width, height;
+	m_graphicsEngine->GetScreenSize(width, height);
+	m_camera->SetFOVAspect(Deg2Rad(75.f), (float)width/(float)height);
 }
 
 void QCWorld::ScreenSizeChanged(int width, int height) {
 	const float aspect = width / ((float)height);
 	m_camera->SetFOVAspect(75.f / 180.f * 3.1419f, aspect);
-	m_guiCamera->SetBounds(0, width, height, 0, -1, 1);
+	m_guiCamera->SetExtent({ width, height });
+	m_guiCamera->SetPosition(m_guiCamera->GetExtent()/2);
+	m_fideszText->SetPosition({ width / 2.0f, height / 2.f });
 	m_graphicsEngine->SetEnvVariable("world_render_size", inl::Any(inl::Vec2(width, height)));
 }
 
@@ -522,7 +642,7 @@ void QCWorld::AddTree(inl::Vec3 position) {
 	tree->SetPosition(position);
 	tree->SetRotation({ 1,0,0,0 });
 	tree->SetScale({ s,s,s });
-	m_worldScene->GetMeshEntities().Add(tree.get());
+	m_worldScene->GetEntities<gxeng::MeshEntity>().Add(tree.get());
 	m_staticEntities.push_back(std::move(tree));
 }
 
@@ -596,7 +716,7 @@ void QCWorld::CreatePipelineResources()
 
 	{
 		using PixelT = gxeng::Pixel<gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\lensFlare\\lens_color.png");
+		inl::asset::Image img(AssetPath("lensFlare\\lens_color.png"));
 
 		m_lensFlareColorImage.reset(this->m_graphicsEngine->CreateImage());
 		m_lensFlareColorImage->SetLayout(img.GetWidth(), img.GetHeight(), gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR);
@@ -607,7 +727,7 @@ void QCWorld::CreatePipelineResources()
 
 	{
 		using PixelT = gxeng::Pixel<gxeng::ePixelChannelType::INT8_NORM, 3, gxeng::ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\colorGrading\\default_lut_table.png");
+		inl::asset::Image img(AssetPath("colorGrading\\default_lut_table.png"));
 
 		m_colorGradingLutImage.reset(this->m_graphicsEngine->CreateImage());
 		m_colorGradingLutImage->SetLayout(img.GetWidth(), img.GetHeight(), gxeng::ePixelChannelType::INT8_NORM, 3, gxeng::ePixelClass::LINEAR);
@@ -621,7 +741,7 @@ void QCWorld::CreatePipelineResources()
 
 	{
 		using PixelT = gxeng::Pixel<gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\lensFlare\\lens_dirt.png");
+		inl::asset::Image img(AssetPath("lensFlare\\lens_dirt.png"));
 
 		m_lensFlareDirtImage.reset(this->m_graphicsEngine->CreateImage());
 		m_lensFlareDirtImage->SetLayout(img.GetWidth(), img.GetHeight(), gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR);
@@ -632,7 +752,7 @@ void QCWorld::CreatePipelineResources()
 
 	{
 		using PixelT = gxeng::Pixel<gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\lensFlare\\lens_star.png");
+		inl::asset::Image img(AssetPath("lensFlare\\lens_star.png"));
 
 		m_lensFlareStarImage.reset(this->m_graphicsEngine->CreateImage());
 		m_lensFlareStarImage->SetLayout(img.GetWidth(), img.GetHeight(), gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR);
@@ -643,7 +763,7 @@ void QCWorld::CreatePipelineResources()
 
 	{
 		using PixelT = gxeng::Pixel<gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR>;
-		inl::asset::Image img("assets\\font\\courier_new_0.png");
+		inl::asset::Image img(AssetPath("font\\courier_new_0.png"));
 
 		m_fontImage.reset(this->m_graphicsEngine->CreateImage());
 		m_fontImage->SetLayout(img.GetWidth(), img.GetHeight(), gxeng::ePixelChannelType::INT8_NORM, 4, gxeng::ePixelClass::LINEAR);
@@ -654,7 +774,7 @@ void QCWorld::CreatePipelineResources()
 
 	{
 		std::fstream f;
-		f.open("assets\\font\\courier_new.fnt", std::ios::in | std::ios::binary | std::ios::ate);
+		f.open(AssetPath("font\\courier_new.fnt"), std::ios::in | std::ios::binary | std::ios::ate);
 		if (f.is_open())
 		{
 			size_t size = f.tellg();
@@ -667,4 +787,8 @@ void QCWorld::CreatePipelineResources()
 
 		this->m_graphicsEngine->SetEnvVariable("TextRender_fontBinary", inl::Any{ m_fontBinary.get() });
 	}
+}
+
+std::string QCWorld::AssetPath(std::string name) const {
+	return INL_ASSET_DIRECTORY "\\" + std::move(name);
 }

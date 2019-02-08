@@ -32,17 +32,20 @@ auto CommandListPool::RequestList(gxapi::eCommandListType type, gxapi::ICommandA
 }
 
 GraphicsCmdListPtr CommandListPool::RequestGraphicsList(gxapi::ICommandAllocator* allocator) {
-	return dynamic_cast_smart<gxapi::IGraphicsCommandList>(RequestList(gxapi::eCommandListType::GRAPHICS, allocator));
+	return dynamic_pointer_cast<gxapi::IGraphicsCommandList>(RequestList(gxapi::eCommandListType::GRAPHICS, allocator));
 }
 ComputeCmdListPtr CommandListPool::RequestComputeList(gxapi::ICommandAllocator* allocator) {
-	return dynamic_cast_smart<gxapi::IComputeCommandList>(RequestList(gxapi::eCommandListType::COMPUTE, allocator));
+	return dynamic_pointer_cast<gxapi::IComputeCommandList>(RequestList(gxapi::eCommandListType::COMPUTE, allocator));
 }
 CopyCmdListPtr CommandListPool::RequestCopyList(gxapi::ICommandAllocator* allocator) {
-	return dynamic_cast_smart<gxapi::ICopyCommandList>(RequestList(gxapi::eCommandListType::COPY, allocator));
+	return dynamic_pointer_cast<gxapi::ICopyCommandList>(RequestList(gxapi::eCommandListType::COPY, allocator));
 }
 
 
 void CommandListPool::RecycleList(gxapi::ICommandList* list) {
+	if (auto x = dynamic_cast<gxapi::IComputeCommandList*>(list)) {
+		x->ResetState(nullptr);
+	}
 	switch (list->GetType())
 	{
 	case gxapi::eCommandListType::COPY:
@@ -55,6 +58,14 @@ void CommandListPool::RecycleList(gxapi::ICommandList* list) {
 		assert(false); // hülye vagy bazmeg
 	}
 }
+
+
+void CommandListPool::Clear() {
+	m_cpPool.Reset();
+	m_cuPool.Reset();
+	m_gxPool.Reset();
+}
+
 
 gxapi::IGraphicsApi* CommandListPool::GetGraphicsApi() const {
 	return m_gxPool.GetGraphicsApi();

@@ -8,22 +8,41 @@
 #include "ScratchSpacePool.hpp"
 #include "ResourceResidencyQueue.hpp"
 #include "PipelineEventDispatcher.hpp"
-#include "PipelineEventListener.hpp"
 
-#include "CriticalBufferHeap.hpp"
 #include "BackBufferManager.hpp"
 #include "MemoryManager.hpp"
 #include "HostDescHeap.hpp"
 #include "ShaderManager.hpp"
 
+
 #include <GraphicsApi_LL/IGxapiManager.hpp>
 #include <GraphicsApi_LL/IGraphicsApi.hpp>
 #include <GraphicsApi_LL/ISwapChain.hpp>
-#include <GraphicsApi_LL/ICommandQueue.hpp>
+
+#include <GraphicsEngine/IGraphicsEngine.hpp>
 
 #include <BaseLibrary/Logging_All.hpp>
 
 #include <BaseLibrary/Any.hpp>
+#include <BaseLibrary/GraphEditor/IEditorGraph.hpp>
+
+#include <filesystem>
+
+// For the create functions, type covariance.
+#include "Scene.hpp"
+#include "PerspectiveCamera.hpp"
+#include "OrthographicCamera.hpp"
+#include "Camera2D.hpp"
+#include "Mesh.hpp"
+#include "Material.hpp"
+#include "Image.hpp"
+#include "MeshEntity.hpp"
+#include "OverlayEntity.hpp"
+#include "Font.hpp"
+#include "TextEntity.hpp"
+
+
+#undef CreateFont // Fuck goddamn winapi -.-
 
 
 namespace inl {
@@ -35,57 +54,28 @@ class Image;
 class Material;
 class MaterialShaderEquation;
 class MaterialShaderGraph;
+class Font;
 
 class Scene;
 class MeshEntity;
 class OverlayEntity;
+class TextEntity;
 class PerspectiveCamera;
 class OrthographicCamera;
 
-class WindowResizeListener;
-
 
 struct GraphicsEngineDesc {
-	gxapi::IGxapiManager* gxapiManager;
-	gxapi::IGraphicsApi* graphicsApi;
-	gxapi::NativeWindowHandle targetWindow;
-	bool fullScreen;
-	int width;
-	int height;
-	Logger* logger;
+	gxapi::IGxapiManager* gxapiManager = nullptr;
+	gxapi::IGraphicsApi* graphicsApi = nullptr;
+	gxapi::NativeWindowHandle targetWindow = {};
+	bool fullScreen = false;
+	int width = 640;
+	int height = 480;
+	Logger* logger = nullptr;
 };
 
 
-// Temporary, delete this!!!!44négy
-// Peti wuz here '17.07.28 - surprisingly, I actually understood why this is temporary, but I'm not gonna write it down
-// Yeah, I still understand and this is really not important '17.11.07
-class PipelineEventPrinter : public PipelineEventListener {
-public:
-	PipelineEventPrinter() : m_log(nullptr) {}
-
-	void SetLog(LogStream* log) { m_log = log; }
-
-	void OnFrameBeginDevice(uint64_t frameId) override {
-		m_log->Event(LogEvent{ "Frame begin - DEVICE", EventParameterInt("frameId", (int)frameId) });
-	}
-	void OnFrameBeginHost(uint64_t frameId) override {
-		m_log->Event(LogEvent{ "Frame begin - HOST", EventParameterInt("frameId", (int)frameId) });
-	}
-	void OnFrameBeginAwait(uint64_t frameId) override {
-		m_log->Event(LogEvent{ "Awaiting frame", EventParameterInt("frameId", (int)frameId) });
-	}
-	void OnFrameCompleteDevice(uint64_t frameId) override {
-		m_log->Event(LogEvent{ "Frame finished - DEVICE", EventParameterInt("frameId", (int)frameId) });
-	}
-	void OnFrameCompleteHost(uint64_t frameId) override {
-		m_log->Event(LogEvent{ "Frame finished - HOST", EventParameterInt("frameId", (int)frameId) });
-	}
-private:
-	LogStream* m_log;
-};
-
-
-class GraphicsEngine {
+class GraphicsEngine : public IGraphicsEngine {
 public:
 	// Custructors
 	GraphicsEngine(GraphicsEngineDesc desc);
@@ -95,27 +85,53 @@ public:
 
 
 	// Update scene
-	void Update(float elapsed);
-	void SetScreenSize(unsigned width, unsigned height);
-	void GetScreenSize(unsigned& width, unsigned& height);
-	void SetFullScreen(bool enable);
-	bool GetFullScreen() const;
+
+	/// <summary> Redraws the entire screen. </summary>
+	/// <param name="elapsed"> Time since last frame in seconds. </param>
+	/// <remarks>
+	/// Since this call operates on all the entities and resources that compose the scene,
+	/// you are not allowed to concurrently modify these objects while Update() is running.
+	/// This includes but is not limited to adding new entities to a scene and uploading
+	/// data to meshes or images.
+	/// </remarks>
+	void Update(float elapsed) override;
+
+	/// <summary> Rescales the backbuffer. </summary>
+	/// <remarks> Causes a pipeline flush, high overhead. </remarks>
+	void SetScreenSize(unsigned width, unsigned height) override;
+
+	/// <summary> Returns the current backbuffer size in the out parameters. </remarks>
+	void GetScreenSize(unsigned& width, unsigned& height) override;
+
+	/// <summary> Sets the D3D swap chain to full-screen mode. </summary>
+	/// <param name="enable"> True to full screen, false to windowed. </param>
+	void SetFullScreen(bool enable) override;
+
+	/// <summary> True if the swap chain is currently in full-screen mode. </summary>
+	bool GetFullScreen() const override;
+
+
+	// Graph editor interfaces
+	IEditorGraph* QueryPipelineEditor() const override;
+	IEditorGraph* QueryMaterialEditor() const override;
 
 
 	// Resources
-	Mesh* CreateMesh();
-	Image* CreateImage();
+	Mesh* CreateMesh() override;
+	Image* CreateImage() override;
 	Material* CreateMaterial();
 	MaterialShaderEquation* CreateMaterialShaderEquation();
 	MaterialShaderGraph* CreateMaterialShaderGraph();
-
-
+	Font* CreateFont() override;
+	
 	// Scene
-	Scene* CreateScene(std::string name);
+	Scene* CreateScene(std::string name) override;
 	MeshEntity* CreateMeshEntity();
-	OverlayEntity* CreateOverlayEntity();
+	OverlayEntity* CreateOverlayEntity() override;
+	TextEntity* CreateTextEntity() override;
 	PerspectiveCamera* CreatePerspectiveCamera(std::string name);
 	OrthographicCamera* CreateOrthographicCamera(std::string name);
+	Camera2D* CreateCamera2D(std::string name) override;
 
 
 	// Pipeline and environment variables
@@ -124,19 +140,27 @@ public:
 	/// <returns> True if a new variable was created, false if old was overridden. </returns>
 	/// <remarks> Environment variables can be accessed in the graphics pipeline graph by the special
 	///		<see cref="nodes::GetEnvVariable"/> node. You can use it to slightly 
-	///		alter pipeline behavriourfrom outside. </remarks>
-	bool SetEnvVariable(std::string name, Any obj);
+	///		alter pipeline behavriour from outside. </remarks>
+	bool SetEnvVariable(std::string name, Any obj) override;
 
 	/// <summary> Returns true if env var with given name exists. </summary>
-	bool EnvVariableExists(const std::string& name);
+	bool EnvVariableExists(const std::string& name) override;
 
 	/// <summary> Return the env var with given name or throws <see cref="InvalidArgumentException"/>. </summary>
-	const Any& GetEnvVariable(const std::string& name);
+	const Any& GetEnvVariable(const std::string& name) override;
 
 	/// <summary> Load the pipeline from the JSON node graph description. </summary>
-	void LoadPipeline(const std::string& nodes);
+	/// <remarks> Tears down all the resources associated with the old pipeline, including
+	///		textures, render targets, etc., and builds up the new pipeline.
+	///		Also incurs a pipeline queue flush. Use it only when settings change,
+	///		use env vars to control pipeline behaviour on the fly.
+	void LoadPipeline(const std::string& nodes) override;
+
+	/// <summary> The engine will look for shader files in these directories. </summary>
+	/// <remarks> May be absolute, relative, or whatever paths you OS can handle. </remarks>
+	void SetShaderDirectories(const std::vector<std::filesystem::path>& directories) override;
 private:
-	//void CreatePipeline();
+	void FlushPipelineQueue();
 	void RegisterPipelineClasses();
 	static std::vector<GraphicsNode*> SelectSpecialNodes(Pipeline& pipeline);
 	void UpdateSpecialNodes();
@@ -153,10 +177,8 @@ private:
 	RTVHeap m_rtvHeap;
 	CbvSrvUavHeap m_persResViewHeap;
 	std::unique_ptr<BackBufferManager> m_backBufferHeap;
-	std::vector<WindowResizeListener*> m_windowResizeListeners;
 
 	// Pipeline Facilities
-	GraphicsNodeFactory m_nodeFactory;
 	CommandAllocatorPool m_commandAllocatorPool;
 	CommandListPool m_commandListPool;
 	ScratchSpacePool m_scratchSpacePool; // Creates CBV_SRV_UAV type scratch spaces
@@ -172,7 +194,6 @@ private:
 	CommandQueue m_masterCommandQueue;
 	ResourceResidencyQueue m_residencyQueue;
 	PipelineEventDispatcher m_pipelineEventDispatcher;
-	PipelineEventPrinter m_pipelineEventPrinter; // ONLY FOR TEST PURPOSES
 
 	// Logging
 	Logger* m_logger;
@@ -189,6 +210,7 @@ private:
 	// Scene
 	std::set<Scene*> m_scenes;
 	std::set<BasicCamera*> m_cameras;
+	std::set<Camera2D*> m_cameras2d;
 };
 
 

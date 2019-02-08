@@ -16,38 +16,18 @@ BackBufferManager::BackBufferManager(gxapi::IGraphicsApi* graphicsApi, gxapi::IS
 {
 	const unsigned numBuffers = swapChain->GetDesc().numBuffers;
 
-	{
-		gxapi::DescriptorHeapDesc heapDesc;
-		heapDesc.isShaderVisible = false;
-		heapDesc.numDescriptors = numBuffers;
-		heapDesc.type = gxapi::eDescriptorHeapType::RTV;
-		m_descriptorHeap.reset(m_graphicsApi->CreateDescriptorHeap(heapDesc));
-	}
-
-	gxapi::RenderTargetViewDesc rtvDesc;
-	rtvDesc.dimension = gxapi::eRtvDimension::TEXTURE2DARRAY;
-	rtvDesc.tex2DArray.activeArraySize = 1;
-	rtvDesc.tex2DArray.firstArrayElement = 0;
-	rtvDesc.tex2DArray.firstMipLevel = 0;
-	rtvDesc.tex2DArray.planeIndex = 0;
-
 	m_backBuffers.reserve(numBuffers);
 	for (unsigned i = 0; i < numBuffers; i++) {
-		MemoryObjDesc texDesc = MemoryObjDesc(swapChain->GetBuffer(i), eResourceHeap::CRITICAL); // CRITICAL is going to be fine for now, consider adding BACKBUFFER
-		gxapi::ResourceDesc resourceDesc = texDesc.resource->GetDesc();
-		gxapi::DescriptorHandle descriptorHandle = m_descriptorHeap->At(i);
+		MemoryObject::UniquePtr resource(swapChain->GetBuffer(i), std::default_delete<const gxapi::IResource>());
+		gxapi::ResourceDesc resourceDesc = resource->GetDesc();
 
-		rtvDesc.format = resourceDesc.textureDesc.format;
-		
-		Texture2D texture{ std::move(texDesc) };
-
-		RenderTargetView2D rtv{texture, descriptorHandle, graphicsApi, rtvDesc.format, rtvDesc.tex2DArray };
-		m_backBuffers.push_back(std::move(rtv));
+		Texture2D texture{ std::move(resource), true, eResourceHeap::BACKBUFFER };
+		m_backBuffers.push_back(std::move(texture));
 	}
 }
 
 
-RenderTargetView2D& BackBufferManager::GetBackBuffer(unsigned index) {
+Texture2D& BackBufferManager::GetBackBuffer(unsigned index) {
 	return m_backBuffers.at(index);
 }
 

@@ -13,7 +13,7 @@ ConstantBufferHeap::ConstantBufferHeap(gxapi::IGraphicsApi* graphicsApi) :
 }
 
 
-VolatileConstBuffer ConstantBufferHeap::CreateVolatileBuffer(const void* data, uint32_t dataSize) {
+VolatileConstBuffer ConstantBufferHeap::CreateVolatileConstBuffer(const void* data, uint32_t dataSize) {
 	uint32_t targetSize = (uint32_t)SnapUpward(dataSize, ALIGNEMENT);
 
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -25,7 +25,7 @@ VolatileConstBuffer ConstantBufferHeap::CreateVolatileBuffer(const void* data, u
 	if (m_pages.Front().m_consumedSize + targetSize > m_pages.Front().m_pageSize) {
 		if (targetSize > PAGE_SIZE) {
 			if (m_largePages.Count() == 0) {
-				m_largePages.PushFront(std::move(CreateLargePage(targetSize)));
+				m_largePages.PushFront(CreateLargePage(targetSize));
 			}
 			else {
 				if (HasBecomeAvailable(m_largePages.Front())) {
@@ -46,7 +46,7 @@ VolatileConstBuffer ConstantBufferHeap::CreateVolatileBuffer(const void* data, u
 
 				bool noSuitable = roundEnd == m_largePages.Begin();
 				if (noSuitable) {
-					m_largePages.PushFront(std::move(CreateLargePage(targetSize)));
+					m_largePages.PushFront(CreateLargePage(targetSize));
 				}
 			}
 
@@ -82,26 +82,23 @@ VolatileConstBuffer ConstantBufferHeap::CreateVolatileBuffer(const void* data, u
 
 	memcpy(cpuPtr, data, dataSize);
 
-	MemoryObjDesc desc;
-	desc.resident = true;
-	desc.resource = MemoryObjDesc::UniqPtr(targetPage->m_representedMemory.get(), [](gxapi::IResource*){});
-	desc.heap = eResourceHeap::CONSTANT;
+	auto NullDeleter = [](const gxapi::IResource*) {};
+	auto resource = MemoryObject::UniquePtr(targetPage->m_representedMemory.get(), NullDeleter);
 
-	return VolatileConstBuffer(std::move(desc), gpuPtr, dataSize, targetSize);
+	return VolatileConstBuffer(std::move(resource), true, eResourceHeap::CONSTANT, gpuPtr, dataSize, targetSize);
 }
 
 
-PersistentConstBuffer ConstantBufferHeap::CreatePersistentBuffer(const void* data, uint32_t dataSize) {
-	MemoryObjDesc objDesc = MemoryObjDesc(
+PersistentConstBuffer ConstantBufferHeap::CreatePersistentConstBuffer(const void* data, uint32_t dataSize) {
+	MemoryObject::UniquePtr resource{
 		m_graphicsApi->CreateCommittedResource(
 			gxapi::HeapProperties{ gxapi::eHeapType::UPLOAD },
 			gxapi::eHeapFlags::NONE,
 			gxapi::ResourceDesc::Buffer(dataSize),
 			gxapi::eResourceState::GENERIC_READ
 		),
-		eResourceHeap::CONSTANT
-	);
-	auto resource = objDesc.resource.get();
+		std::default_delete<const gxapi::IResource>()
+	};
 
 	gxapi::MemoryRange noReadRange{0, 0};
 	void* dst = resource->Map(0, &noReadRange);
@@ -110,7 +107,7 @@ PersistentConstBuffer ConstantBufferHeap::CreatePersistentBuffer(const void* dat
 
 	void* gpuPtr = resource->GetGPUAddress();
 
-	return PersistentConstBuffer(std::move(objDesc), gpuPtr, dataSize, dataSize);
+	return PersistentConstBuffer(std::move(resource), true, eResourceHeap::CRITICAL, gpuPtr, dataSize, dataSize);
 }
 
 
@@ -125,7 +122,7 @@ void ConstantBufferHeap::OnFrameBeginHost(uint64_t frameId)
 void ConstantBufferHeap::OnFrameCompleteDevice(uint64_t frameId) {
 	std::lock_guard<std::mutex> lock(m_mutex);
 
-	m_lastFinishedFrameID++;
+	m_lastFinishedFrameID = frameId;
 
 	bool foundVictim = true;
 	while (m_largePages.Count() > MAX_PERMANENT_LARGE_PAGE_COUNT && foundVictim) {

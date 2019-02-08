@@ -37,6 +37,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cassert>
 
 #include "DefinitionsUtil.hpp"
 
@@ -97,10 +98,23 @@ public:
 
 	/// <summary> Returns the nth element of the swizzled vector. Example: v.zxy[2] returns y. </summary>
 	T& operator[](int idx) {
+		assert(idx < Dim);
 		return data()[IndexTable[idx]];
 	}
 	/// <summary> Returns the nth element of the swizzled vector. Example: v.zxy[2] returns y. </summary>
 	T operator[](int idx) const {
+		assert(idx < Dim);
+		return data()[IndexTable[idx]];
+	}
+
+	/// <summary> Returns the nth element of the swizzled vector. Example: v.zxy(2) returns y. </summary>
+	T& operator()(int idx) {
+		assert(idx < Dim);
+		return data()[IndexTable[idx]];
+	}
+	/// <summary> Returns the nth element of the swizzled vector. Example: v.zxy(2) returns y. </summary>
+	T operator()(int idx) const {
+		assert(idx < Dim);
 		return data()[IndexTable[idx]];
 	}
 
@@ -143,6 +157,14 @@ template <class T, bool Packed>
 class VectorData<T, 2, Packed> {
 	using ST = T;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) {
+		for (int i = 0; i<2; ++i) { data[i] = rhs.data[i]; }
+	}
+	VectorData& operator=(const VectorData& rhs) {
+		for (int i = 0; i<2; ++i) { data[i] = rhs.data[i]; }
+		return *this;
+	}
 	union {
 		struct { T x, y; };
 		T data[2]; /// <summary> Raw array containing the elements. </summary>
@@ -154,6 +176,14 @@ template <class T, bool Packed>
 class VectorData<T, 3, Packed> {
 	using ST = T;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) {
+		for (int i = 0; i<3; ++i) { data[i] = rhs.data[i]; }
+	}
+	VectorData& operator=(const VectorData& rhs) {
+		for (int i = 0; i<3; ++i) { data[i] = rhs.data[i]; }
+		return *this;
+	}
 	union {
 		struct { T x, y, z; };
 		T data[3]; /// <summary> Raw array containing the elements. </summary>
@@ -165,6 +195,14 @@ template <class T, bool Packed>
 class VectorData<T, 4, Packed> {
 	using ST = T;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) {
+		for (int i = 0; i<4; ++i) { data[i] = rhs.data[i]; }
+	}
+	VectorData& operator=(const VectorData& rhs) {
+		for (int i = 0; i<4; ++i) { data[i] = rhs.data[i]; }
+		return *this;
+	}
 	union {
 		struct { T x, y, z, w; };
 		T data[4]; /// <summary> Raw array containing the elements. </summary>
@@ -178,6 +216,9 @@ template <>
 class VectorData<float, 2, false> {
 	using ST = float;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) { simd = rhs.simd; }
+	VectorData& operator=(const VectorData& rhs) { simd = rhs.simd; return *this; }
 	union {
 		Simd<float, 2> simd; /// <summary> Leave this member alone. You can't fuck it up though. </summary>
 		struct { float x, y; };
@@ -190,6 +231,9 @@ template <>
 class VectorData<float, 3, false> {
 	using ST = float;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) { simd = rhs.simd; }
+	VectorData& operator=(const VectorData& rhs) { simd = rhs.simd; return *this; }
 	union {
 		Simd<float, 4> simd; /// <summary> Leave this member alone. You can't fuck it up though. </summary>
 		struct { float x, y, z; };
@@ -202,6 +246,9 @@ template <>
 class VectorData<float, 4, false> {
 	using ST = float;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) { simd = rhs.simd; }
+	VectorData& operator=(const VectorData& rhs) { simd = rhs.simd; return *this; }
 	union {
 		Simd<float, 4> simd; /// <summary> Leave this member alone. You can't fuck it up though. </summary>
 		struct { float x, y, z, w; };
@@ -213,6 +260,9 @@ public:
 template <>
 class VectorData<float, 8, false> {
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) { simd = rhs.simd; }
+	VectorData& operator=(const VectorData& rhs) { simd = rhs.simd; return *this; }
 	union {
 		Simd<float, 8> simd; /// <summary> Leave this member alone. You can't fuck it up though. </summary>
 		float data[8]; /// <summary> Raw array containing the elements. </summary>
@@ -225,6 +275,9 @@ template <>
 class VectorData<double, 2, false> {
 	using ST = double;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) { simd = rhs.simd; }
+	VectorData& operator=(const VectorData& rhs) { simd = rhs.simd; return *this; }
 	union {
 		Simd<double, 2> simd; /// <summary> Leave this member alone. You can't fuck it up though. </summary>
 		struct { double x, y; };
@@ -237,6 +290,9 @@ template <>
 class VectorData<double, 3, false> {
 	using ST = double;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) { simd = rhs.simd; }
+	VectorData& operator=(const VectorData& rhs) { simd = rhs.simd; return *this; }
 	union {
 		Simd<double, 4> simd; /// <summary> Leave this member alone. You can't fuck it up though. </summary>
 		struct { double x, y, z; };
@@ -249,6 +305,9 @@ template <>
 class VectorData<double, 4, false> {
 	using ST = double;
 public:
+	VectorData() {}
+	VectorData(const VectorData& rhs) { simd = rhs.simd; }
+	VectorData& operator=(const VectorData& rhs) { simd = rhs.simd; return *this; }
 	union {
 		Simd<double, 4> simd; /// <summary> Leave this member alone. You can't fuck it up though. </summary>
 		struct { double x, y, z, w; };
@@ -633,7 +692,7 @@ public:
 	// Data constructors
 	//--------------------------------------------
 
-	/// <summary> Construct the vector. Does NOT zero-initialize elements. </summary>
+	/// <summary> Constructs the vector. Does NOT zero-initialize elements. </summary>
 	Vector() { 
 		CheckLayoutContraints(); 
 	}
@@ -669,7 +728,7 @@ public:
 	//--------------------------------------------
 
 	/// <summary> Creates a homogeneous vector by appending a 1. </summary>
-	template <class T2, bool Packed2, class = typename std::enable_if<(Dim>=2)>::type>
+	template <class T2, bool Packed2, class = typename std::enable_if<(Dim>=2), T2>::type>
 	explicit Vector(const Vector<T2, Dim-1, Packed2>& rhs) : Vector(rhs, 1) {}
 
 	/// <summary> Truncates last coordinate of homogenous vector to create non-homogeneous. </summary>
@@ -735,19 +794,23 @@ public:
 
 	/// <summary> Returns the nth element of the vector. </summary>
 	T operator[](int idx) const {
+		assert(idx < Dimension());
 		return data[idx];
 	}
 	/// <summary> Returns the nth element of the vector. </summary>
 	T& operator[](int idx) {
+		assert(idx < Dimension());
 		return data[idx];
 	}
 
 	/// <summary> Returns the nth element of the vector. </summary>
 	T operator()(int idx) const {
+		assert(idx < Dimension());
 		return data[idx];
 	}
 	/// <summary> Returns the nth element of the vector. </summary>
 	T& operator()(int idx) {
+		assert(idx < Dimension());
 		return data[idx];
 	}
 
@@ -821,7 +884,7 @@ public:
 		return same;
 	}
 	auto Approx() const {
-		return mathter::Approx<Vector>(*this);
+		return mathter::ApproxHelper<Vector>(*this);
 	}
 
 	//--------------------------------------------
@@ -894,7 +957,7 @@ public:
 
 	/// <summary> Makes a unit vector, but keeps direction. Leans towards (1,0,0...) for nullvectors, costs more. </summary>
 	void SafeNormalize() {
-		(*this)(0) = std::max((*this)(0), std::numeric_limits<T>::denorm_min());
+		(*this)(0) = std::abs((*this)(0)) > std::numeric_limits<T>::denorm_min() ? (*this)(0) : std::numeric_limits<T>::denorm_min();
 		T l = LengthPrecise();
 		operator/=(l);
 	}
@@ -929,6 +992,7 @@ public:
 		for (int i = 1; i < Dim; ++i) {
 			s = lhs.data[i] * rhs.data[i] + s;
 		}
+		return s;
 	}
 
 	/// <summary> Returns the squared length of the vector. </summary>
@@ -943,9 +1007,9 @@ public:
 
 	/// <summary> Returns the length of the vector, avoids overflow and underflow, so it's more expensive. </summary>
 	T LengthPrecise() const {
-		T maxElement = (*this)(0);
+		T maxElement = std::abs((*this)(0));
 		for (int i = 1; i<Dimension(); ++i) {
-			maxElement = std::max(maxElement, (*this)(i));
+			maxElement = std::max(maxElement, std::abs((*this)(i)));
 		}
 		if (maxElement == T(0)) {
 			return T(0);
@@ -1090,12 +1154,12 @@ auto Normalized(const Vector<T, Dim, Packed>& arg) {
 }
 
 /// <summary> Return the elementwise minimum of the arguments. </summary>
-template <class T, int Dim, int Packed>
+template <class T, int Dim, bool Packed>
 auto Min(const Vector<T, Dim, Packed>& lhs, const Vector<T, Dim, Packed>& rhs) {
 	return Vector<T, Dim, Packed>::Min(lhs, rhs);
 }
 /// <summary> Return the elementwise maximum of the arguments. </summary>
-template <class T, int Dim, int Packed>
+template <class T, int Dim, bool Packed>
 auto Max(const Vector<T, Dim, Packed>& lhs, const Vector<T, Dim, Packed>& rhs) {
 	return Vector<T, Dim, Packed>::Max(lhs, rhs);
 }
@@ -1164,55 +1228,6 @@ Vector<T1, sizeof...(Indices1)+1, false> operator|(const Swizzle<T1, Indices1...
 template <class T1, int... Indices1, class U>
 Vector<T1, sizeof...(Indices1)+1, false> operator|(U lhs, const Swizzle<T1, Indices1...>& rhs) {
 	return lhs | Vector<T1, sizeof...(Indices1), false>(rhs);
-}
-
-
-
-} // namespace mathter
-
-
-
-// Generalized cross-product unfortunately needs matrix determinant.
-#include "Matrix.hpp"
-
-namespace mathter {
-
-
-template <class T, int Dim, bool Packed>
-auto VectorSpecialOps<T, Dim, Packed>::Cross(const std::array<const VectorT*, Dim - 1>& args) -> VectorT {
-	VectorT result;
-	Matrix<T, Dim - 1, Dim - 1, eMatrixOrder::FOLLOW_VECTOR, eMatrixLayout::ROW_MAJOR, false> detCalc;
-
-	// Calculate elements of result on-by-one
-	int sign = 2 * (Dim % 2) - 1;
-	for (int base = 0; base < result.Dimension(); ++base, sign *= -1) {
-		// Fill up sub-matrix the determinant of which yields the coefficient of base-vector.
-		for (int j = 0; j < base; ++j) {
-			for (int i = 0; i < detCalc.RowCount(); ++i) {
-				detCalc(i, j) = (*(args[i]))[j];
-			}
-		}
-		for (int j = base + 1; j < result.Dimension(); ++j) {
-			for (int i = 0; i < detCalc.RowCount(); ++i) {
-				detCalc(i, j - 1) = (*(args[i]))[j];
-			}
-		}
-
-		T coefficient = T(sign) * detCalc.Determinant();
-		result(base) = coefficient;
-	}
-
-	return result;
-}
-
-
-template <class T, int Dim, bool Packed>
-template <class... Args>
-auto VectorSpecialOps<T, Dim, Packed>::Cross(const VectorT& head, Args&&... args) -> VectorT {
-	static_assert(1 + sizeof...(args) == Dim - 1, "Number of arguments must be (Dimension - 1).");
-
-	std::array<const VectorT*, Dim - 1> vectors = { &head, &args... };
-	return Cross(vectors);
 }
 
 
@@ -1369,7 +1384,7 @@ Vector<T, Dim, Packed> strtovec(const char* str, const char** end) {
 
 template <class VectorT>
 VectorT strtovec(const char* str, const char** end) {
-	static_assert(impl::IsVector<VectorT>::value, "This type if not a Vector, dumbass.");
+	static_assert(impl::IsVector<VectorT>::value, "This type is not a Vector, dumbass.");
 
 	return strtovec<
 		typename impl::VectorProperties<VectorT>::Type,
@@ -1382,6 +1397,50 @@ VectorT strtovec(const char* str, const char** end) {
 } // namespace mathter
 
 
+
+// Generalized cross-product unfortunately needs matrix determinant.
+#include "Matrix.hpp"
+
+namespace mathter {
+
+template<class T, int Dim, bool Packed>
+auto VectorSpecialOps<T, Dim, Packed>::Cross(const std::array<const VectorT *, Dim - 1> &args) -> VectorT {
+	VectorT result;
+	Matrix<T, Dim - 1, Dim - 1, eMatrixOrder::FOLLOW_VECTOR, eMatrixLayout::ROW_MAJOR, false> detCalc;
+
+	// Calculate elements of result on-by-one
+	int sign = 2 * (Dim % 2) - 1;
+	for (int base = 0; base < result.Dimension(); ++base, sign *= -1) {
+		// Fill up sub-matrix the determinant of which yields the coefficient of base-vector.
+		for (int j = 0; j < base; ++j) {
+			for (int i = 0; i < detCalc.RowCount(); ++i) {
+				detCalc(i, j) = (*(args[i]))[j];
+			}
+		}
+		for (int j = base + 1; j < result.Dimension(); ++j) {
+			for (int i = 0; i < detCalc.RowCount(); ++i) {
+				detCalc(i, j - 1) = (*(args[i]))[j];
+			}
+		}
+
+		T coefficient = T(sign) * detCalc.Determinant();
+		result(base) = coefficient;
+	}
+
+	return result;
+}
+
+
+template<class T, int Dim, bool Packed>
+template<class... Args>
+auto VectorSpecialOps<T, Dim, Packed>::Cross(const VectorT &head, Args &&... args) -> VectorT {
+	static_assert(1 + sizeof...(args) == Dim - 1, "Number of arguments must be (Dimension - 1).");
+
+	std::array<const VectorT *, Dim - 1> vectors = {&head, &args...};
+	return Cross(vectors);
+}
+
+} // namespace mathter
 
 
   // Remove goddamn fucking bullshit crapware winapi macros.

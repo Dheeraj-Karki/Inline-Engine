@@ -4,13 +4,16 @@
 #include <GraphicsEngine_LL/GraphicsEngine.hpp>
 #include <GraphicsEngine_LL/Mesh.hpp>
 #include <GraphicsEngine_LL/Material.hpp>
+#include <GraphicsEngine_LL/MaterialShader.hpp>
 #include <GraphicsEngine_LL/Image.hpp>
 #include <GraphicsEngine_LL/MeshEntity.hpp>
 #include <GraphicsEngine_LL/Scene.hpp>
 #include <GraphicsEngine_LL/OverlayEntity.hpp>
 #include <GraphicsEngine_LL/PerspectiveCamera.hpp>
-#include <GraphicsEngine_LL/OrthographicCamera.hpp>
+#include <GraphicsEngine_LL/Camera2D.hpp>
 #include <GraphicsEngine_LL/DirectionalLight.hpp>
+#include <GraphicsEngine_LL/Font.hpp>
+#include <GraphicsEngine_LL/TextEntity.hpp>
 #include "RigidBody.hpp"
 #include "Rotor.hpp"
 #include "PIDController.hpp"
@@ -34,11 +37,11 @@ struct ControlInfo {
 	//           >       <
 	inl::Vec4 RPM(const Rotor& rotor) const {
 		inl::Vec3 force, torque;
-		force = { 0, 0, weight + (int)ascend - (int)descend };
+		force = { 0, 0, weight + ascend - descend };
 		torque = {
-			0.05f*((int)back - (int)front),
-			0.05f*((int)right - (int)left),
-			0.2f*((int)rotateLeft - (int)rotateRight)
+			0.05f*(back - front),
+			0.05f*(right - left),
+			0.2f*(rotateLeft - rotateRight)
 		};
 		inl::Vec4 rpm;
 		rotor.SetTorque(force, torque, rpm);
@@ -82,6 +85,7 @@ public:
 private:
 	void AddTree(inl::Vec3 position);
 	void CreatePipelineResources();
+	std::string AssetPath(std::string name) const;
 private:
 	// Engine
 	inl::gxeng::GraphicsEngine* m_graphicsEngine;
@@ -97,11 +101,15 @@ private:
 	std::unique_ptr<inl::gxeng::Image> m_treeTexture;
 	std::unique_ptr<inl::gxeng::Mesh> m_sphereMesh;
 
+	std::unique_ptr<inl::gxeng::Mesh> m_billboardMesh;
+
 	std::unique_ptr<inl::gxeng::Image> m_sphereAlbedoTex;
 	std::unique_ptr<inl::gxeng::Image> m_sphereMetalnessTex;
 	std::unique_ptr<inl::gxeng::Image> m_sphereRoughnessTex;
 	std::unique_ptr<inl::gxeng::Image> m_sphereNormalTex;
 	std::unique_ptr<inl::gxeng::Image> m_sphereAOTex;
+
+	std::unique_ptr<inl::gxeng::Image> m_billboardSorosTex;
 
 
 	std::unique_ptr<inl::gxeng::Image> m_checkerTexture;
@@ -111,8 +119,11 @@ private:
 	std::unique_ptr<inl::gxeng::Material> m_terrainMaterial;
 	std::unique_ptr<inl::gxeng::Material> m_sphereMaterial;
 	std::unique_ptr<inl::gxeng::Material> m_axesMaterial;
+	std::unique_ptr<inl::gxeng::Material> m_billboardMaterial;
 	std::unique_ptr<inl::gxeng::MaterialShaderGraph> m_simpleShader;
 	std::unique_ptr<inl::gxeng::MaterialShaderGraph> m_pbrShader;
+
+	std::unique_ptr<inl::gxeng::Font> m_font;
 
 	// Pipeline resources
 	std::unique_ptr<inl::gxeng::Image> m_areaImage, m_searchImage;
@@ -127,6 +138,8 @@ private:
 	std::unique_ptr<inl::gxeng::MeshEntity> m_sphereEntity;
 	std::unique_ptr<inl::gxeng::MeshEntity> m_quadcopterEntity;
 	std::unique_ptr<inl::gxeng::MeshEntity> m_axesEntity;
+	std::unique_ptr<inl::gxeng::MeshEntity> m_billboardEntity;
+	std::unique_ptr<inl::gxeng::MeshEntity> m_billboardEntity2;
 
 	inl::gxeng::DirectionalLight m_sun;
 
@@ -135,11 +148,14 @@ private:
 	std::unique_ptr<inl::gxeng::Scene> m_worldScene;
 
 	// Gui
-	std::unique_ptr<inl::gxeng::OrthographicCamera> m_guiCamera;
+	std::unique_ptr<inl::gxeng::Camera2D> m_guiCamera;
 	std::unique_ptr<inl::gxeng::Scene> m_guiScene;
 	std::unique_ptr<inl::gxeng::Mesh> m_overlayQuadMesh;
 	std::unique_ptr<inl::gxeng::Image> m_overlayTexture;
 	std::vector<std::unique_ptr<inl::gxeng::OverlayEntity>> m_overlayElements;
+	std::unique_ptr<inl::gxeng::TextEntity> m_infoText;
+	std::unique_ptr<inl::gxeng::TextEntity> m_fideszText;
+	bool m_textFlashing = false;
 
 	// Simulation
 	PIDController m_controller;

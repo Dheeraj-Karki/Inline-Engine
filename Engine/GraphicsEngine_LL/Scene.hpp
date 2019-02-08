@@ -1,7 +1,10 @@
 #pragma once
 
-#include "EntityCollection.hpp"
 #include <string>
+#include <typeindex>
+#include <unordered_map>
+
+#include <GraphicsEngine/Scene/IScene.hpp>
 
 namespace inl {
 namespace gxeng {
@@ -11,37 +14,37 @@ class GraphicsEngine;
 
 class MeshEntity;
 class OverlayEntity;
+class TextEntity;
 
 class DirectionalLight;
 
 
-class Scene {
+class Scene : public IScene {
 public:
 	Scene() = default;
 	Scene(std::string name);
 	Scene(const Scene&) = delete;
 	Scene& operator=(const Scene&) = delete;
+	Scene(Scene&&) = default;
+	Scene& operator=(Scene&&) = default;
 	virtual ~Scene();
 
-	void SetName(std::string name);
-	const std::string& GetName() const;
-		
-	EntityCollection<MeshEntity>& GetMeshEntities();
-	const EntityCollection<MeshEntity>& GetMeshEntities() const;
+	void SetName(std::string name) override;
+	const std::string& GetName() const override;
 
-	EntityCollection<OverlayEntity>& GetOverlayEntities();
-	const EntityCollection<OverlayEntity>& GetOverlayEntities() const;
-
-	EntityCollection<DirectionalLight>& GetDirectionalLights();
-	const EntityCollection<DirectionalLight>& GetDirectionalLights() const;
+	using IScene::GetEntities;
+protected:
+	EntityCollectionBase* GetEntities(const std::type_index& entityType) override;
+	const EntityCollectionBase* GetEntities(const std::type_index& entityType) const override;
+	void NewCollection(std::unique_ptr<EntityCollectionBase> collection, const std::type_index& type) override;
 
 private:
-	EntityCollection<MeshEntity> m_meshEntities;	
-	EntityCollection<OverlayEntity> m_overlayEntities;
-	EntityCollection<DirectionalLight> m_directionalLights;
+	std::unordered_map<std::type_index, std::unique_ptr<EntityCollectionBase>> m_entityCollections;
 
 	std::string m_name;
 };
+
+
 
 
 

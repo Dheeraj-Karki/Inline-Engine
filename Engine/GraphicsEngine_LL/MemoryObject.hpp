@@ -7,9 +7,9 @@
 
 #include <functional>
 #include <cassert>
+#include <string>
 
-namespace inl {
-namespace gxeng {
+namespace inl::gxeng {
 
 
 class MemoryManager;
@@ -22,29 +22,16 @@ enum class eResourceHeap {
 	STREAMING,
 	PIPELINE,
 	CRITICAL,
+	BACKBUFFER,
 	INVALID,
 };
 
 
-struct MemoryObjDesc {
-	using Deleter = std::function<void(gxapi::IResource*)>;
-	using UniqPtr = std::unique_ptr<gxapi::IResource, Deleter>;
-
-	MemoryObjDesc() { heap = eResourceHeap::INVALID; }
-	MemoryObjDesc(gxapi::IResource* ptr, eResourceHeap heap, bool resident = true);
-
-	UniqPtr resource;
-	bool resident;
-	eResourceHeap heap;
-};
-
-// TODO make std hash for memory object
 class MemoryObject {
 public:
 	friend struct std::hash<MemoryObject>;
 
-	using Deleter = MemoryObjDesc::Deleter;
-
+	using UniquePtr = std::unique_ptr<gxapi::IResource, std::function<void(const gxapi::IResource*)>>;
 public:
 	static bool PtrLess(const MemoryObject& lhs, const MemoryObject& rhs);
 	static bool PtrGreater(const MemoryObject& lhs, const MemoryObject& rhs);
@@ -52,8 +39,8 @@ public:
 
 public:
 	MemoryObject() = default;
-	explicit MemoryObject(MemoryObjDesc&& desc);
-	virtual ~MemoryObject() {}
+	MemoryObject(UniquePtr resource, bool resident, eResourceHeap heap);
+	virtual ~MemoryObject() = default;
 
 	MemoryObject(const MemoryObject&) = default;
 	MemoryObject(MemoryObject&&) = default;
@@ -66,19 +53,35 @@ public:
 	/// Different MemoryObject instances are equal if one is the copy of the other. </summary>
 	bool operator==(const MemoryObject&) const;
 
+	/// <summary> Returns true if the operands do not refer to the same resource,
+	///		or if one of them is empty. </summary>
+	bool operator!=(const MemoryObject& rhs) const { return !(*this == rhs); }
+
+
+	/// <summary> True if there is an actual GPU resource behind this object. False
+	///		if this object has not been initialized yet. </summary>
 	explicit operator bool() const {
 		return (bool)m_contents;
 	}
 
+	/// <summary> True if there is an actual GPU resource behind this object. False
+	///		if this object has not been initialized yet. </summary>
 	bool HasObject() const {
 		return (bool)m_contents;
 	}
 	
-	void* GetVirtualAddress() const;
+	/// <summary> Return the virtual address of the GPU resource behind this object. </summary>
+	virtual void* GetVirtualAddress() const;
+
+	/// <summary> Returns the description of the GPU resource as given by the underlying GxApi. </summary>
 	gxapi::ResourceDesc GetDescription() const;
 
 	/// <summary> Sets the name of the resource. Only for debug purposes. </summary>
+	/// <remarks> You can easily identify the resources by their name in D3D debug output. </remarks>
 	void SetName(const std::string& name);
+
+	/// <summary> Sets the name of the resource. Only for debug purposes. </summary>
+	/// <remarks> You can easily identify the resources by their name in D3D debug output. </remarks>
 	void SetName(const char* name);
 
 	/// <summary> Records the current state of the resource. Does not change resource state, only used for tracking it. </summary>
@@ -88,7 +91,10 @@ public:
 	/// <summary> Returns the current tracked state. </summary>
 	gxapi::eResourceState ReadState(unsigned subresource) const;
 
+	/// <summary> The total number of subresources, equals mipCount*arrayCount*planeCount. </summary>
 	unsigned GetNumSubresources() const { return (unsigned)m_contents->resource->GetNumSubresources(); }
+
+	/// <summary> Returns the number of mip levels. One if not applicable (e.g. for buffers). </summary>
 	unsigned GetNumMiplevels() const { return (unsigned)m_contents->resource->GetNumMipLevels(); }
 
 
@@ -103,19 +109,22 @@ protected:
 	void InitResourceStates(gxapi::eResourceState initialState);
 
 	struct Contents {
-		std::unique_ptr<gxapi::IResource, Deleter> resource;
+		Contents() = default;
+		Contents(UniquePtr&& resource, bool resident, eResourceHeap heap) : resource(std::move(resource)), resident(resident), heap(heap) {}
+		UniquePtr resource;
 		bool resident;
 		eResourceHeap heap;
 		std::vector<gxapi::eResourceState> subresourceStates;
+		std::string name;
 	};
 	std::shared_ptr<Contents> m_contents;
 };
 
-//==================================
 
 
-//==================================
+//------------------------------------------------------------------------------
 // Vertex buffer, index buffer
+//------------------------------------------------------------------------------
 
 class LinearBuffer : public MemoryObject {
 public:
@@ -133,7 +142,7 @@ public:
 class IndexBuffer : public LinearBuffer {
 public:
 	IndexBuffer() : m_indexCount(0) {}
-	IndexBuffer(MemoryObjDesc&& desc, size_t indexCount);
+	IndexBuffer(UniquePtr resource, bool resident, eResourceHeap heap, size_t indexCount);
 
 	size_t GetIndexCount() const;
 
@@ -141,21 +150,21 @@ protected:
 	size_t m_indexCount;
 };
 
-//==================================
 
-
-//==================================
+//------------------------------------------------------------------------------
 // Const Buffers
+//------------------------------------------------------------------------------
+
 
 class ConstBuffer : public LinearBuffer {
 public:
-	void* GetVirtualAddress() const;
+	void* GetVirtualAddress() const override;
 
 	uint64_t GetSize() const;
 	uint64_t GetDataSize() const;
 
 protected:
-	ConstBuffer(MemoryObjDesc&& desc, void* gpuVirtualPtr, uint32_t dataSize, uint32_t bufferSize);
+	ConstBuffer(UniquePtr resource, bool resident, eResourceHeap heap, void* gpuVirtualPtr, uint32_t dataSize, uint32_t bufferSize);
 
 protected:
 	void* m_gpuVirtualPtr;
@@ -173,20 +182,20 @@ protected:
 
 class VolatileConstBuffer : public ConstBuffer {
 public:
-	VolatileConstBuffer(MemoryObjDesc&& desc, void* gpuVirtualPtr, uint32_t dataSize, uint32_t bufferSize);
+	VolatileConstBuffer(UniquePtr resource, bool resident, eResourceHeap heap, void* gpuVirtualPtr, uint32_t dataSize, uint32_t bufferSize);
 };
 
 
 class PersistentConstBuffer : public ConstBuffer {
 public:
-	PersistentConstBuffer(MemoryObjDesc&& desc, void* gpuVirtualPtr, uint32_t dataSize, uint32_t bufferSize);
+	PersistentConstBuffer(UniquePtr resource, bool resident, eResourceHeap heap, void* gpuVirtualPtr, uint32_t dataSize, uint32_t bufferSize);
 };
 
-//==================================
 
-
-//==================================
+//------------------------------------------------------------------------------
 // Textures
+//------------------------------------------------------------------------------
+
 
 class Texture1D : public MemoryObject {
 public:
@@ -223,8 +232,8 @@ public:
 };
 
 
-} // namespace gxeng
-} // namespace inl
+} // namespace inl::gxeng
+
 
 namespace std {
 template <>
@@ -233,5 +242,4 @@ struct hash<inl::gxeng::MemoryObject> {
 		return reinterpret_cast<size_t>(obj.m_contents.get());
 	}
 };
-
 }

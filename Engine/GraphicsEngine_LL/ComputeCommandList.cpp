@@ -73,6 +73,9 @@ BasicCommandList::Decomposition ComputeCommandList::Decompose() {
 //------------------------------------------------------------------------------
 void ComputeCommandList::Dispatch(size_t numThreadGroupsX, size_t numThreadGroupsY, size_t numThreadGroupsZ) {
 	m_commandList->Dispatch(numThreadGroupsX, numThreadGroupsY, numThreadGroupsZ);
+	m_computeBindingManager.CommitDrawCall();
+
+	m_performanceCounters.numKernels++;
 }
 
 
@@ -91,7 +94,7 @@ void ComputeCommandList::SetPipelineState(gxapi::IPipelineState* pipelineState) 
 //------------------------------------------------------------------------------
 // Set compute root signature stuff
 //------------------------------------------------------------------------------
-void ComputeCommandList::SetComputeBinder(Binder* binder) {
+void ComputeCommandList::SetComputeBinder(const Binder* binder) {
 	assert(binder != nullptr);
 	m_computeBindingManager.SetBinder(binder);
 }

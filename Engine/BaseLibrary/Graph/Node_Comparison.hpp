@@ -11,14 +11,14 @@ class ComparsionNode
 {
 public:
 	ComparsionNode() {
-		this->GetInput<0>().AddObserver(this);
-		this->GetInput<1>().AddObserver(this);
+		this->template GetInput<0>().AddObserver(this);
+		this->template GetInput<1>().AddObserver(this);
 	}
 
 	void Update() override {
-		auto in0 = this->GetInput<0>().Get();
-		auto in1 = this->GetInput<1>().Get();
-		GetOutput<0>().Set(OperatorT()(in0, in1));
+		auto in0 = this->template GetInput<0>().Get();
+		auto in1 = this->template GetInput<1>().Get();
+		this->template GetOutput<0>().Set(OperatorT()(in0, in1));
 	}
 
 	void Notify(InputPortBase* sender) override {
@@ -28,7 +28,7 @@ public:
 	static std::string Info_GetName() {
 		return name;
 	}
-	std::string GetClassName(bool simplify = false, const std::vector<std::string>& stripNamespaces = {}) const override {
+	std::string GetClassName(bool simplify = false, const std::vector<std::regex>& additional = {}) const override {
 		auto s = Info_GetName();
 		return s.substr(0, s.find_first_of(':'));
 	}

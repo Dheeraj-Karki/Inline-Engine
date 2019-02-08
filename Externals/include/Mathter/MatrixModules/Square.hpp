@@ -24,10 +24,19 @@ class MatrixSquare<T, Dim, Dim, Order, Layout, Packed> {
 	MatrixT& self() { return *static_cast<MatrixT*>(this); }
 	const MatrixT& self() const { return *static_cast<const MatrixT*>(this); }
 public:
+	/// <summary> Returns the trace (sum of diagonal elements) of the matrix. </summary>
 	T Trace() const;
+
+	/// <summary> Returns the determinant of the matrix. </summary>
 	T Determinant() const;
+
+	/// <summary> Transposes the matrix in-place. </summary>
 	MatrixT& Transpose();
+	
+	/// <summary> Inverts the matrix in-place. </summary>
 	MatrixT& Invert();
+	
+	/// <summary> Returns the inverse of the matrix. </summary>
 	MatrixT Inverse() const;
 public:
 	friend MatrixT;
@@ -68,7 +77,7 @@ auto MatrixSquare<T, Dim, Dim, Order, Layout, Packed>::Transpose() -> MatrixT& {
 
 template <class T, int Dim, eMatrixOrder Order, eMatrixLayout Layout, bool Packed>
 auto MatrixSquare<T, Dim, Dim, Order, Layout, Packed>::Invert() -> MatrixT& {
-	*this = Inverse();
+	self() = self().Inverse();
 	return self();
 }
 

@@ -1,55 +1,65 @@
 #pragma once
 
-#include <InlineMath.hpp>
+#include "Image.hpp"
+#include "Mesh.hpp"
 
-#include <variant>
+#include <BaseLibrary/Transformable.hpp>
+#include <BaseLibrary/Rect.hpp>
+#include <GraphicsEngine/Scene/IOverlayEntity.hpp>
+
+#include <InlineMath.hpp>
 
 namespace inl::gxeng {
 
 
-class Mesh;
-class Image;
-
-
-class OverlayEntity {
-public:
-	enum SurfaceType { TEXTURED, COLORED };
+class OverlayEntity : public IOverlayEntity, public Transformable2DN {
 
 public:
 	OverlayEntity();
 
-	void SetVisible(bool visible);
-	bool GetVisible() const;
-
+	/// <summary> Sets a 2D triangle mesh as shape of the object. </summary>
+	/// <remarks> Set to null to draw a unit rectangle with corners (0,0) and (1,1).
+	///		<para/> Mesh must have at least Vec2 position and Vec2 texcoord0. </remarks>
+	void SetMesh(IMesh* mesh) { SetMesh(static_cast<Mesh*>(mesh)); }
 	void SetMesh(Mesh* mesh);
-	Mesh* GetMesh() const;
+	Mesh* GetMesh() const override;
 
-	SurfaceType GetSurfaceType() const;
+	/// <summary> Solid color of the object. Multiplied together with texture color. </summary>
+	void SetColor(Vec4 color) override;
+	Vec4 GetColor() const override;
 
-	void SetColor(Vec4 color);
-	Vec4 GetColor() const;
+	/// <summary> Texture color of the object. Multiplied together with base color. </summary>
+	/// <remarks> Set to null if you only want solid color. </remarks>
+	void SetTexture(IImage* texture) { SetTexture(static_cast<Image*>(texture)); }
 	void SetTexture(Image* texture);
-	Image* GetTexture() const;
+	Image* GetTexture() const override;
 
-	void SetPosition(Vec2 pos);
-	void SetRotation(float rotation);
-	void SetScale(Vec2 scale);
+	/// <summary> Z-Depth determines which 2D entity lays over the other. </summary>
+	/// <remarks> Number are not limited to [0,1], anything is fine. Don't pass NaN and Inf. </remarks>
+	void SetZDepth(float z) override;
+	float GetZDepth() const override;
 
-	Vec2 GetPosition() const;
-	Vec2 GetScale() const;
-	float GetRotation() const;
 
-	Mat44 GetTransform() const;
+	/// <summary> The text is optionally clipped against an additional bounding box as well. </summary>
+	/// <param name="clipRectangle"> The rectangle to clip against. </param>
+	/// <param name="transform"> How to transform the <paramref name="clipRectangle"/> before clipping. </param>
+	void SetAdditionalClip(RectF clipRectangle, Mat33 transform) override;
+	/// <summary> Returns the additional cliiping rectangle and its transform. </summary>
+	std::pair<RectF, Mat33> GetAdditionalClip() const override;
+	/// <summary> Enabled or disables the usage of the additional clip rectangle. </summary>
+	void EnableAdditionalClip(bool enabled) override;
+	/// <summary> Check if additional clip rectangle is active. </summary>
+	bool IsAdditionalClipEnabled() const override;
 
 private:
-	Mesh* m_mesh;
+	Mesh* m_mesh = nullptr;
+	Image* m_texture = nullptr;
+	Vec4 m_color;
+	float m_zDepth = 0.0f;
 
-	bool m_visible;
-	std::variant<Image*, Vec4> m_color;
-
-	Vec2 m_position;
-	Vec2 m_scale;
-	float m_rotation;
+	RectF m_clipRect;
+	Mat33 m_clipRectTransform;
+	bool m_clipEnabled = false;
 };
 
 

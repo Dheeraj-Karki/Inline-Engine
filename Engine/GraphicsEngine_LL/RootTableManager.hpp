@@ -36,10 +36,12 @@ protected:
 public:
 	RootTableManager();
 	RootTableManager(gxapi::IGraphicsApi* graphicsApi, CommandListT* commandList);
-	void SetBinder(Binder* binder);
+	void SetBinder(const Binder* binder);
 	void SetDescriptorHeap(StackDescHeap* heap);
 	void CommitDrawCall();
 	void UpdateBinding(gxapi::DescriptorHandle handle, int rootSignatureSlot, int indexInTable);
+
+	size_t GetDescriptorCounter() const { return m_descriptorCounter; }
 private:
 	/// <summary> Updates a binding which is managed on the scratch space. </summary>
 	void UpdateRootTable(gxapi::DescriptorHandle, int rootSignatureSlot, int indexInTable);
@@ -51,7 +53,7 @@ private:
 	DescriptorTableState&  FindRootTable(int rootSignatureSlot);
 
 	/// <summary> Calculates root table states based on the currently bound Binder. </summary>
-	void InitRootTables();
+	std::vector<DescriptorTableState> InitRootTables(const Binder* binder);
 
 	/// <summary> Marks all root tables committed. Call this after each drawcall. </summary>
 	void CommitRootTables();
@@ -66,8 +68,16 @@ private:
 protected:
 	gxapi::IGraphicsApi* m_graphicsApi;
 	CommandListT* m_commandList;
-	Binder* m_binder;
+	const Binder* m_binder;
 	StackDescHeap* m_heap;
+
+	// These are only used inside DuplicateRootTable, but we don't want them to allocate every single time.
+	std::vector<gxapi::DescriptorHandle> sourceDescHandles;
+	std::vector<uint32_t> sourceRangeSizes;
+	std::vector<gxapi::DescriptorHandle> destDescHandleStarts;
+	std::vector<uint32_t> destRangeSizes;
+
+	size_t m_descriptorCounter = 0; // Profiling only. Keeps track of the number of descriptors allocated on the scratch space.
 private:
 	std::vector<DescriptorTableState> m_rootTableStates;
 };
@@ -78,6 +88,8 @@ template <gxapi::eCommandListType Type>
 RootTableManager<Type>::RootTableManager() {
 	m_graphicsApi = nullptr;
 	m_commandList = nullptr;
+	m_binder = nullptr;
+	m_heap = nullptr;
 }
 
 
@@ -85,14 +97,20 @@ template <gxapi::eCommandListType Type>
 RootTableManager<Type>::RootTableManager(gxapi::IGraphicsApi* graphicsApi, CommandListT* commandList) {
 	m_graphicsApi = graphicsApi;
 	m_commandList = commandList;
+	m_binder = nullptr;
+	m_heap = nullptr;
 }
 
 
 template <gxapi::eCommandListType Type>
-void RootTableManager<Type>::SetBinder(Binder* binder) {
+void RootTableManager<Type>::SetBinder(const Binder* binder) {
+	auto rootTableStates = InitRootTables(binder);
+	SetRootSignature(m_commandList, binder->GetRootSignature());
+	for (auto& state : rootTableStates) {
+		SetRootDescriptorTable(m_commandList, state.slot, state.reference.Get(0));
+	}
+	m_rootTableStates = std::move(rootTableStates);
 	m_binder = binder;
-	SetRootSignature(m_commandList, m_binder->GetRootSignature());
-	InitRootTables();
 }
 
 
@@ -142,20 +160,16 @@ void RootTableManager<Type>::DuplicateRootTable(DescriptorTableState& table) {
 
 	// allocate new space on scratch space
 	DescriptorArrayRef space = m_heap->Allocate(numDescriptors);
+	m_descriptorCounter += numDescriptors;
 
 	// copy old descriptors to new space
-	std::vector<gxapi::DescriptorHandle> sourceDescHandles;
-	std::vector<uint32_t> sourceRangeSizes(numDescriptors, 1);
-
-	std::vector<gxapi::DescriptorHandle> destDescHandleStarts;
-	std::vector<uint32_t> destRangeSizes;
-
-	sourceDescHandles.reserve(numDescriptors);
-	destDescHandleStarts.reserve(10); // 99% only needs 1, 10 is negligible overhead but less allocation
-	destRangeSizes.reserve(10);
+	sourceRangeSizes.resize(numDescriptors, 1);
+	sourceDescHandles.clear();
+	destDescHandleStarts.clear();
+	destRangeSizes.clear();
 
 	bool makeFreshRange = true;
-	for (size_t i = 0; i < numDescriptors; ++i) {
+	for (uint32_t i = 0; i < numDescriptors; ++i) {
 		if (table.bindings[i].cpuAddress != 0) {
 			// initially and after null descriptors, start a new range
 			if (makeFreshRange) {
@@ -199,9 +213,9 @@ auto RootTableManager<Type>::FindRootTable(int rootSignatureSlot) -> DescriptorT
 }
 
 template <gxapi::eCommandListType Type>
-void RootTableManager<Type>::InitRootTables() {
-	m_rootTableStates.clear();
-	const gxapi::RootSignatureDesc& desc = m_binder->GetRootSignatureDesc();
+std::vector<DescriptorTableState> RootTableManager<Type>::InitRootTables(const Binder* binder) {
+	std::vector<DescriptorTableState> rootTableStates;
+	const gxapi::RootSignatureDesc& desc = binder->GetRootSignatureDesc();
 
 	for (size_t slot = 0; slot < desc.rootParameters.size(); slot++) {
 		auto& param = desc.rootParameters[slot];
@@ -237,11 +251,13 @@ void RootTableManager<Type>::InitRootTables() {
 			assert(descriptorCountTotal == largestIndex);
 
 			// add record for this table
-			m_rootTableStates.push_back({ m_heap->Allocate((uint32_t)descriptorCountTotal), (int)slot });
-			SetRootDescriptorTable(m_commandList, m_rootTableStates.back().slot, m_rootTableStates.back().reference.Get(0));
-			m_rootTableStates.back().bindings.resize(descriptorCountTotal);
+			rootTableStates.emplace_back(m_heap->Allocate((uint32_t)descriptorCountTotal), (int)slot);
+			m_descriptorCounter += descriptorCountTotal;
+			rootTableStates.back().bindings.resize(descriptorCountTotal);
 		}
 	}
+
+	return rootTableStates;
 }
 
 template <gxapi::eCommandListType Type>

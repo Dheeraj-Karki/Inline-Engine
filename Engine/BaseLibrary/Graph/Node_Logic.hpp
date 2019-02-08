@@ -31,7 +31,7 @@ public:
 		}
 	}
 
-	void Notify(InputPortBase* sender) {
+	void Notify(InputPortBase* sender) override {
 		for (ptrdiff_t i = 0; i < 6; i++) {
 			if (sender == GetInput(i)) {
 				lastActivated = i;
@@ -43,7 +43,7 @@ public:
 	static std::string Info_GetName() {
 		return "Any:Forward any input to the output";
 	}
-	std::string GetClassName(bool simplify = false, const std::vector<std::string>& stripNamespaces = {}) const override {
+	std::string GetClassName(bool simplify = false, const std::vector<std::regex>& additional = {}) const override {
 		auto s = Info_GetName();
 		return s.substr(0, s.find_first_of(':'));
 	}
@@ -95,7 +95,7 @@ public:
 		}
 	}
 
-	void Notify(InputPortBase* sender) {
+	void Notify(InputPortBase* sender) override {
 		if (sender == GetInput(0)) {
 			activationMap = 0;
 		}
@@ -114,7 +114,7 @@ public:
 	static std::string Info_GetName() {
 		return "All:Forward last input when all inputs were triggered at least once";
 	}
-	std::string GetClassName(bool simplify = false, const std::vector<std::string>& stripNamespaces = {}) const override {
+	std::string GetClassName(bool simplify = false, const std::vector<std::regex>& additional = {}) const override {
 		auto s = Info_GetName();
 		return s.substr(0, s.find_first_of(':'));
 	}

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <GraphicsEngine_LL/Vertex.hpp>
+#include <GraphicsEngine/Resources/Vertex.hpp>
 
 #include <assimp/Importer.hpp>
 #include <assimp/mesh.h>
@@ -106,9 +106,7 @@ struct Model::VertexAttributeSetter<VertexT, gxeng::Position<semanticIndex>, Tai
 		assert(mesh->HasPositions());
 		assert(vertexIndex < mesh->mNumVertices);
 		const aiVector3D& pos = mesh->mVertices[vertexIndex];
-		//target.position = (model->m_transform * mathfu::Vector<float, 4>(pos.x, pos.z, -pos.y, 1)).xyz();
 		target.position = (posTr * Vec4(pos.x, pos.y, pos.z, 1)).xyz;
-		//target.position = DataType(pos.x, pos.z, -pos.y);
 
 		VertexAttributeSetter<VertexT, TailAttribT...>()(target, mesh, vertexIndex, posTr, normTr);
 	}
@@ -149,7 +147,7 @@ struct Model::VertexAttributeSetter<VertexT, gxeng::Tangent<semanticIndex>, Tail
 		const Mat44& posTr,
 		const Mat44& normTr
 		) {
-		using DataType = gxeng::VertexPart<gxeng::eVertexElementSemantic::NORMAL>::DataType;
+		using DataType = typename gxeng::VertexPart<gxeng::eVertexElementSemantic::NORMAL>::DataType;
 		if (mesh->HasTangentsAndBitangents() == false) {
 			throw InvalidCallException("Vertex array requested with tangents but loaded mesh does not have such an attribute.");
 		}
@@ -172,7 +170,7 @@ struct Model::VertexAttributeSetter<VertexT, gxeng::Bitangent<semanticIndex>, Ta
 		const Mat44& posTr,
 		const Mat44& normTr
 		) {
-		using DataType = gxeng::VertexPart<gxeng::eVertexElementSemantic::NORMAL>::DataType;
+		using DataType = typename gxeng::VertexPart<gxeng::eVertexElementSemantic::NORMAL>::DataType;
 		if (mesh->HasTangentsAndBitangents() == false) {
 			throw InvalidCallException("Vertex array requested with bitangents but loaded mesh does not have such an attribute.");
 		}

@@ -9,6 +9,7 @@
 #include <vector>
 #include <cassert>
 
+#define _CRT_SECURE_NO_WARNINGS
 
 namespace inl {
 namespace gxapi_dx12 {
@@ -38,6 +39,23 @@ ID3D12GraphicsCommandList* BasicCommandList::GetNative() {
 gxapi::eCommandListType BasicCommandList::GetType() const {
 	return native_cast(m_native->GetType());
 }
+
+
+void BasicCommandList::BeginDebuggerEvent(const std::string& name) const {
+	PIXBeginEvent(m_native.Get(), PIX_COLOR_DEFAULT, name.c_str());
+}
+
+void BasicCommandList::EndDebuggerEvent() const {
+	PIXEndEvent(m_native.Get());
+}
+
+void BasicCommandList::SetName(const char* name) {
+	size_t count = strlen(name);
+	std::unique_ptr<wchar_t[]> dest = std::make_unique<wchar_t[]>(count + 1);
+	mbstowcs(dest.get(), name, count);
+	m_native->SetName(dest.get());
+}
+
 
 
 //------------------------------------------------------------------------------

@@ -15,6 +15,7 @@
 #define NOMINMAX
 #include <Windows.h>
 #undef DELETE
+#include <hidsdi.h>
 
 
 namespace inl {
@@ -69,6 +70,10 @@ public:
 	/// <summary> Returns the list of available input devices that you can listen to. </summary>
 	static std::vector<InputDevice> GetDeviceList();
 
+	/// <summary> Returns the list of available input devices of specific type that you can listen to. </summary>
+	static std::vector<InputDevice> GetDeviceList(eInputSourceType filter);
+
+	static DWORD DbgTID() { return RawInputSource::GetInstance().DbgTID(); }
 public:
 	Event<MouseButtonEvent> OnMouseButton;
 	Event<MouseMoveEvent> OnMouseMove;
@@ -89,12 +94,20 @@ private:
 private:
 	class RawInputSourceBase {
 		static constexpr size_t InvalidDeviceId = -1;
+		struct JoyState {
+			std::vector<uint8_t> preparsedBuffer;
+			std::vector<bool> buttonStates;
+			std::vector<float> valueStates;
+			std::vector<HIDP_BUTTON_CAPS> buttonCaps;
+			std::vector<HIDP_VALUE_CAPS> valueCaps;
+		};
 	public:
 		RawInputSourceBase();
 		~RawInputSourceBase();
 
 		void AddInput(Input* input, size_t device);
 		void RemoveInput(Input* input, size_t device = InvalidDeviceId);
+		DWORD DbgTID() { return GetThreadId(m_messageLoopThread.native_handle()); }
 	private:
 		static LRESULT __stdcall WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 		void ProcessInput(const RAWINPUT& rawInput);
@@ -103,10 +116,14 @@ private:
 		template <class EventArg>
 		void CallEvents(size_t device, Event<EventArg> Input::*eventMember, const EventArg& evt) const;
 
+		static JoyState GetJoyInfo(size_t deviceId);
+	private:
 		std::mutex m_mtx;
 		std::thread m_messageLoopThread;
 		HWND m_messageLoopWindow = 0;
 		std::map<size_t, std::set<Input*>> m_sources;
+
+		std::unordered_map<size_t, JoyState> m_joyStates; // deviceId -> joyState
 	};
 	using RawInputSource = Singleton<RawInputSourceBase>;
 };

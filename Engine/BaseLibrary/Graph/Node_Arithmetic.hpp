@@ -13,14 +13,14 @@ class BinaryArithmeticNode
 {
 public:
 	BinaryArithmeticNode() {
-		GetInput<0>().AddObserver(this);
-		GetInput<1>().AddObserver(this);
+		this->template GetInput<0>().AddObserver(this);
+		this->template GetInput<1>().AddObserver(this);
 	}
 
 	void Update() override {
-		ArithmeticT a = GetInput<0>().Get();
-		ArithmeticT b = GetInput<1>().Get();
-		GetOutput<0>().Set(Operator()(a, b));
+		ArithmeticT a = this->template GetInput<0>().Get();
+		ArithmeticT b = this->template GetInput<1>().Get();
+		this->template GetOutput<0>().Set(Operator()(a, b));
 	}
 
 	void Notify(InputPortBase* sender) override {
@@ -30,7 +30,7 @@ public:
 	static std::string Info_GetName() {
 		return name;
 	}
-	std::string GetClassName(bool simplify = false, const std::vector<std::string>& stripNamespaces = {}) const override {
+	std::string GetClassName(bool simplify = false, const std::vector<std::regex>& additional = {}) const override {
 		auto s = Info_GetName();
 		return s.substr(0, s.find_first_of(':'));
 	}
@@ -80,17 +80,15 @@ struct DivideOperator {
 };
 
 struct ModuloOperator {
-private:
-	class FloatDummy { friend struct ModuloOperator; FloatDummy() = default; };
-	class IntDummy { friend struct ModuloOperator; IntDummy() = default; };
 public:
-	template <class T, class = std::enable_if<std::is_integral<T>::value>::type>
-	auto operator()(T t, T u, IntDummy = IntDummy()) {
-		return t % u;
-	}
-	template <class T, class = std::enable_if<std::is_floating_point<T>::value>::type>
-	auto operator()(T t, T u, FloatDummy = FloatDummy()) {
-		return std::remainder(t, u);
+	template <class T>
+	auto operator()(T t, T u) {
+		if constexpr (std::is_floating_point<T>::value) {
+			return std::remainder(t, u);
+		}
+		else {
+			return t % u;
+		}
 	}
 };
 

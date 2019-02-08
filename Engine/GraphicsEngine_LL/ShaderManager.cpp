@@ -3,6 +3,7 @@
 #include <thread>
 #include <algorithm>
 #include <fstream>
+#include <functional>
 
 
 namespace inl {
@@ -24,16 +25,22 @@ ShaderManager::~ShaderManager() {
 }
 
 
-void ShaderManager::AddSourceDirectory(std::experimental::filesystem::path directory) {
+void ShaderManager::AddSourceDirectory(std::filesystem::path directory) {
 	std::unique_lock<std::shared_mutex> lkg(m_sourceMutex);
 
 	m_directories.insert(directory);
 }
 
-void ShaderManager::RemoveSourceDirectory(std::experimental::filesystem::path directory) {
+void ShaderManager::RemoveSourceDirectory(std::filesystem::path directory) {
 	std::unique_lock<std::shared_mutex> lkg(m_sourceMutex);
 
 	m_directories.erase(directory);
+}
+
+void ShaderManager::ClearSourceDirectories() {
+	std::unique_lock<std::shared_mutex> lkg(m_sourceMutex);
+
+	m_directories.clear();
 }
 
 auto ShaderManager::GetSourceDirectories() const -> std::pair<PathContainer::const_iterator, PathContainer::const_iterator> {
@@ -51,6 +58,12 @@ void ShaderManager::RemoveSourceCode(const std::string& name) {
 	std::unique_lock<std::shared_mutex> lkg(m_sourceMutex);
 
 	m_codes.erase(name);
+}
+
+void ShaderManager::ClearSourceCodes() {
+	std::unique_lock<std::shared_mutex> lkg(m_sourceMutex);
+
+	m_codes.clear();
 }
 
 auto ShaderManager::GetSourceCodes() const ->std::pair<CodeContainer::const_iterator, CodeContainer::const_iterator> {
@@ -153,6 +166,7 @@ ShaderProgram ShaderManager::CompileShader(const std::string& sourceCode, Shader
 
 std::pair<std::string, std::string> ShaderManager::FindShaderCode(const std::string& name) const {
 	std::string keyName = StripShaderName(name);
+	std::string fileName = StripShaderName(name, false);
 
 	// try it in direct source cache
 	auto codeIt = m_codes.find(keyName);
@@ -162,7 +176,7 @@ std::pair<std::string, std::string> ShaderManager::FindShaderCode(const std::str
 
 	// try it in directories
 	for (const auto& directory : m_directories) {
-		auto filepath = directory / (name + ".hlsl");
+		auto filepath = directory / (fileName + ".hlsl");
 		std::ifstream fs(filepath.c_str());
 		if (fs.is_open()) {
 			fs.seekg(0, std::ios::end);
@@ -250,7 +264,7 @@ ShaderProgram ShaderManager::CompileShaderInternal(const std::string& sourceCode
 }
 
 
-std::string ShaderManager::StripShaderName(std::string name) {
+std::string ShaderManager::StripShaderName(std::string name, bool lowerCase) {
 	// remove extension from the end, if any
 	size_t extDot = name.find_last_of('.');
 	if (extDot != name.npos) {
@@ -261,8 +275,10 @@ std::string ShaderManager::StripShaderName(std::string name) {
 	}
 
 	// convert to lowercase
-	for (auto& c : name) {
-		c = tolower(c);
+	if (lowerCase) {
+		for (auto& c : name) {
+			c = tolower(c);
+		}
 	}
 
 	return name;

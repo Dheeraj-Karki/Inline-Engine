@@ -1,0 +1,54 @@
+{
+    "header": {
+        "contentType": "material"
+    },
+    "nodes": [
+        {
+            "class": "BasicShaded",
+            "id": 0,
+            "meta_pos": "[95, -89]"
+        },
+        {
+            "class": "SurfaceInputs",
+            "id": 1,
+            "meta_pos": "[-281, 154]"
+        },
+        {
+            "class": "UniversalSink",
+            "id": 2,
+            "meta_pos": "[473, -16]"
+        },
+        {
+            "class": "TextureSampleRGBA",
+            "id": 3,
+            "name": "DiffuseTex",
+            "meta_pos": "[-288, -48]"
+        }
+    ],
+    "links": [
+        {
+            "src": 0,
+            "dst": 2,
+            "srcp": 0,
+            "dstp": 0
+        },
+        {
+            "src": 1,
+            "dst": 2,
+            "srcp": 0,
+            "dstp": 1
+        },
+        {
+            "src": 1,
+            "dst": 2,
+            "srcp": 1,
+            "dstp": 2
+        },
+        {
+            "src": "DiffuseTex",
+            "dst": 0,
+            "srcp": 0,
+            "dstp": 0
+        }
+    ]
+}

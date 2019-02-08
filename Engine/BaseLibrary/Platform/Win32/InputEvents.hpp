@@ -44,6 +44,10 @@ struct MouseMoveEvent {
 };
 
 
+struct MouseWheelEvent {
+	float rotation;
+};
+
 
 // Keyboard
 enum class eKey : unsigned {
@@ -169,6 +173,7 @@ enum class eKey : unsigned {
 struct KeyboardEvent {
 	eKeyState state;
 	eKey key;
+	int repcount = 0;
 };
 
 enum class eResizeMode
@@ -216,7 +221,7 @@ enum class eJoystickAxis {
 };
 
 struct JoystickMoveEvent {
-	eJoystickAxis axis;
+	int axis;
 	float absPos;
 };
 

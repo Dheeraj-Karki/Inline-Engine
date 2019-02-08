@@ -7,11 +7,13 @@
 namespace inl {
 
 
-class spin_mutex {
+class SpinMutex {
 public:
-	spin_mutex();
-	spin_mutex(const spin_mutex&) = delete;
-	spin_mutex& operator=(const spin_mutex&) = delete;
+	SpinMutex();
+	SpinMutex(const SpinMutex&) = delete;
+	SpinMutex& operator=(const SpinMutex&) = delete;
+	SpinMutex(SpinMutex&&) noexcept;
+	SpinMutex& operator=(SpinMutex&&) noexcept;
 
 	void lock();
 	bool try_lock();

@@ -31,7 +31,7 @@ eChannelType Image::GetType() const {
 	TranslateImageType(type, count);
 	return type;
 }
-size_t Image::GetChannelCount() const {
+int Image::GetChannelCount() const {
 	eChannelType type;
 	size_t count;
 	TranslateImageType(type, count);
@@ -50,7 +50,7 @@ Pixel<type, count>& Image::At(size_t x, size_t y) {
 	assert(x < GetWidth());
 	assert(y < GetHeight());
 
-	if (type != GetType() && count != GetCount()) {
+	if (type != GetType() && count != GetChannelCount()) {
 		throw InvalidCastException("The image does not contain this pixel type.");
 	}
 
@@ -61,7 +61,7 @@ const Pixel<type, count>& Image::At(size_t x, size_t y) {
 	assert(x < GetWidth());
 	assert(y < GetHeight());
 
-	if (type != GetType() && count != GetCount()) {
+	if (type != GetType() && count != GetChannelCount()) {
 		throw InvalidCastException("The image does not contain this pixel type.");
 	}
 

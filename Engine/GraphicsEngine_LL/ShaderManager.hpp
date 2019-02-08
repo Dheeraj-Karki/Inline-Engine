@@ -123,8 +123,8 @@ private:
 		volatile ShaderParts parts;
 	};
 	struct PathHash {
-		size_t operator()(const std::experimental::filesystem::path& obj) const {
-			return std::experimental::filesystem::hash_value(obj);
+		size_t operator()(const std::filesystem::path& obj) const {
+			return std::filesystem::hash_value(obj);
 		}
 	};
 	struct ShaderIdHash {
@@ -134,7 +134,7 @@ private:
 		}
 	};
 
-	using PathContainer = std::unordered_set<std::experimental::filesystem::path, PathHash>;
+	using PathContainer = std::unordered_set<std::filesystem::path, PathHash>;
 	using CodeContainer = std::unordered_map<std::string, std::string>;
 	using ShaderContainer = std::unordered_map<ShaderId, std::unique_ptr<ShaderStore>, ShaderIdHash>;
 public:
@@ -143,11 +143,14 @@ public:
 
 	/// <summary> Adds a new source directory to look for shader codes. </summary> 
 	/// <remarks> This method is thread-safe. </remarks>
-	void AddSourceDirectory(std::experimental::filesystem::path directory);
+	void AddSourceDirectory(std::filesystem::path directory);
 
 	/// <summary> Removes a shader source directory from the list. </summary> 
 	/// <remarks> This method is thread-safe. </remarks>
-	void RemoveSourceDirectory(std::experimental::filesystem::path directory);
+	void RemoveSourceDirectory(std::filesystem::path directory);
+
+	/// <summary> Removes all added source directories. </summary>
+	void ClearSourceDirectories();
 
 	/// <summary> Query source directories currently in use. </summary> 
 	/// <returns> Iterator to the beginning and end of the range containing shader directories. </returns>
@@ -163,6 +166,9 @@ public:
 	/// <summary> Removes a source code to the list. </summary> 
 	/// <remarks> This method is thread-safe. </remarks>
 	void RemoveSourceCode(const std::string& name);
+
+	/// <summary> Removes all added source codes. </summary>
+	void ClearSourceCodes();
 
 	/// <summary> Query source codes currently in use. </summary>
 	/// <returns> Iterator to the beginning and end of the range containing source codes. </returns>
@@ -207,7 +213,7 @@ private:
 	ShaderProgram CompileShaderInternal(const std::string& sourceCode, ShaderParts parts, const std::string& macros);
 
 	// Cuts off extension (only .hlsl, .glsl, .cg, .txt), converts to lowercase.
-	static std::string StripShaderName(std::string name);
+	static std::string StripShaderName(std::string name, bool lowerCase = true);
 private:
 	gxapi::IGxapiManager* m_gxapiManager;
 

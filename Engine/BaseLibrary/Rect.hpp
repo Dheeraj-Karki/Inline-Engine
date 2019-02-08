@@ -10,6 +10,7 @@ template <class T, bool InvertHorizontal, bool InvertVertical>
 class Rect {
 public:
 	using Vec2T = Vector<T, 2, false>;
+
 public:
 	Rect() : left(0), right(0), bottom(0), top(0) {}
 	Rect(T left, T right, T bottom, T top)
@@ -17,6 +18,8 @@ public:
 	Rect(Vec2T anchorPoint1, Vec2T anchorPoint2);
 	static Rect FromSize(T bottom, T left, T width, T height);
 	static Rect FromSize(Vec2T bottomLeft, Vec2T size);
+	static Rect FromCenter(T centerx, T centery, T width, T height);
+	static Rect FromCenter(Vec2T center, Vec2T size);
 
 	Vec2T GetSize() const;
 	T GetWidth() const;
@@ -48,15 +51,16 @@ public:
 
 	bool operator==(const Rect& arg) const;
 	bool operator!=(const Rect& arg) const;
+
 public:
 	T left, right, bottom, top;
 };
 
 
 template <class T, bool InvertHorizontal, bool InvertVertical>
-Rect<T, InvertHorizontal,InvertVertical>::Rect(Vec2T anchorPoint1, Vec2T anchorPoint2) {
-	Vec2T minp = std::min(anchorPoint1, anchorPoint2);
-	Vec2T maxp = std::max(anchorPoint1, anchorPoint2);
+Rect<T, InvertHorizontal, InvertVertical>::Rect(Vec2T anchorPoint1, Vec2T anchorPoint2) {
+	Vec2T minp = Min(anchorPoint1, anchorPoint2);
+	Vec2T maxp = Max(anchorPoint1, anchorPoint2);
 
 	if constexpr (!InvertHorizontal) {
 		left = minp.x;
@@ -83,25 +87,54 @@ Rect<T, InvertHorizontal, InvertVertical> Rect<T, InvertHorizontal, InvertVertic
 }
 
 template <class T, bool InvertHorizontal, bool InvertVertical>
+Rect<T, InvertHorizontal, InvertVertical> Rect<T, InvertHorizontal, InvertVertical>::FromCenter(T centerx, T centery, T width, T height) {
+	return FromSize({ centerx, centery }, { width, height });
+}
+
+template <class T, bool InvertHorizontal, bool InvertVertical>
 Rect<T, InvertHorizontal, InvertVertical> Rect<T, InvertHorizontal, InvertVertical>::FromSize(Vec2T bottomLeft, Vec2T size) {
-	
-	left = bottomLeft.x;
-	bottom = bottomLeft.y;
+	Rect rc;
+	rc.left = bottomLeft.x;
+	rc.bottom = bottomLeft.y;
 
 	if constexpr (!InvertHorizontal) {
-		right = bottomLeft.x + size.x;
-		
+		rc.right = bottomLeft.x + size.x;
 	}
 	else {
-		right = bottomLeft.x - size.x;
+		rc.right = bottomLeft.x - size.x;
 	}
 
 	if constexpr (!InvertVertical) {
-		top = bottomLeft.y + size.y;
+		rc.top = bottomLeft.y + size.y;
 	}
-	else {		
-		top = bottomLeft.y - size.y;
+	else {
+		rc.top = bottomLeft.y - size.y;
 	}
+	return rc;
+}
+
+template <class T, bool InvertHorizontal, bool InvertVertical>
+Rect<T, InvertHorizontal, InvertVertical> Rect<T, InvertHorizontal, InvertVertical>::FromCenter(Vec2T center, Vec2T size) {
+	Rect rc;
+
+	if constexpr (!InvertHorizontal) {
+		rc.right = center.x + size.x / T(2);
+		rc.left = center.x - size.x / T(2);
+	}
+	else {
+		rc.right = center.x - size.x / T(2);
+		rc.left = center.x + size.x / T(2);
+	}
+
+	if constexpr (!InvertVertical) {
+		rc.top = center.y + size.y / T(2);
+		rc.bottom = center.y - size.y / T(2);
+	}
+	else {
+		rc.top = center.y - size.y / T(2);
+		rc.bottom = center.y + size.y / T(2);
+	}
+	return rc;
 }
 
 template <class T, bool InvertHorizontal, bool InvertVertical>
@@ -197,7 +230,7 @@ void Rect<T, InvertHorizontal, InvertVertical>::SetSize(Vec2T newSize, Vec2T ori
 
 template <class T, bool InvertHorizontal, bool InvertVertical>
 void Rect<T, InvertHorizontal, InvertVertical>::SetWidth(T newWidth, T origin) {
-	T p = (T(1) - origin)*left + origin*right;
+	T p = (T(1) - origin) * left + origin * right;
 
 	if constexpr (!InvertHorizontal) {
 		left = p - origin * newWidth;
@@ -211,8 +244,8 @@ void Rect<T, InvertHorizontal, InvertVertical>::SetWidth(T newWidth, T origin) {
 
 template <class T, bool InvertHorizontal, bool InvertVertical>
 void Rect<T, InvertHorizontal, InvertVertical>::SetHeight(T newHeight, T origin) {
-	T p = (T(1) - origin)*bottom + origin*top;
-	
+	T p = (T(1) - origin) * bottom + origin * top;
+
 
 	if constexpr (!InvertVertical) {
 		bottom = p - origin * newHeight;
@@ -312,46 +345,27 @@ Rect<T, InvertHorizontal, InvertVertical> Rect<T, InvertHorizontal, InvertVertic
 
 template <class T, bool InvertHorizontal, bool InvertVertical>
 bool Rect<T, InvertHorizontal, InvertVertical>::IsPointInside(const Vec2T& arg) const {
-	bool bVerticalInside;
-	bool bHorizontalInside;
+	auto minHoriz = std::min(left, right);
+	auto maxHoriz = std::max(left, right);
+	auto minVert = std::min(bottom, top);
+	auto maxVert = std::max(bottom, top);
 
-	if constexpr (!InvertHorizontal) {
-		bHorizontalInside = arg.x >= left && arg.x <= right;
-	}
-	else {
-		bHorizontalInside = arg.x <= left && arg.x >= right;
-	}
-
-	if constexpr (!InvertVertical) {
-		bVerticalInside = arg.y >= bottom && arg.y <= top;
-	}
-	else {
-		bVerticalInside = arg.y <= bottom && arg.y >= top;
-	}
-
-	return bVerticalInside && bHorizontalInside;
+	return (minHoriz <= arg.x && arg.x <= maxHoriz) && (minVert <= arg.y && arg.y <= maxVert);
 }
 
 template <class T, bool InvertHorizontal, bool InvertVertical>
 bool Rect<T, InvertHorizontal, InvertVertical>::IsRectInside(const Rect& arg) const {
-	bool bVerticalInside;
-	bool bHorizontalInside;
+	auto minHorizArg = std::min(arg.left, arg.right);
+	auto maxHorizArg = std::max(arg.left, arg.right);
+	auto minVertArg = std::min(arg.bottom, arg.top);
+	auto maxVertArg = std::max(arg.bottom, arg.top);
 
-	if constexpr (!InvertHorizontal) {
-		bHorizontalInside = arg.left >= left && arg.right <= right
-	}
-	else {
-		bHorizontalInside = arg.left <= left && arg.right >= right
-	}
+	auto minHoriz = std::min(left, right);
+	auto maxHoriz = std::max(left, right);
+	auto minVert = std::min(bottom, top);
+	auto maxVert = std::max(bottom, top);
 
-	if constexpr (!InvertVertical) {
-		bVerticalInside = arg.top <= top && arg.bottom >= bottom;
-	}
-	else {
-		bVerticalInside = arg.top >= top && arg.bottom <= bottom;
-	}
-
-	return bVerticalInside && bHorizontalInside;
+	return (minHoriz <= minHorizArg && maxHorizArg <= maxHoriz) && (minVert <= minVertArg && maxVertArg <= maxVert);
 }
 
 template <class T, bool InvertHorizontal, bool InvertVertical>

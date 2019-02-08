@@ -4,12 +4,11 @@
 #include "Binder.hpp"
 #include "BasicCommandList.hpp"
 
-#include "../GraphicsApi_LL/Common.hpp"
-#include "../GraphicsApi_LL/ICommandList.hpp"
+#include <GraphicsApi_LL/Common.hpp>
+#include <GraphicsApi_LL/ICommandList.hpp>
+#include <GraphicsApi_LL/IPipelineState.hpp>
 
 #include <InlineMath.hpp>
-#include <type_traits>
-#include <unordered_map>
 
 namespace inl {
 namespace gxapi {
@@ -85,27 +84,27 @@ protected:
 
 public:
 	// Resource copy
-	void CopyBuffer(MemoryObject& dst, size_t dstOffset, const MemoryObject& src, size_t srcOffset, size_t numBytes);
+	void CopyBuffer(const MemoryObject& dst, size_t dstOffset, const MemoryObject& src, size_t srcOffset, size_t numBytes);
 
-	void CopyResource(MemoryObject* dst, MemoryObject* src) = delete; // TODO: implement
+	void CopyResource(const MemoryObject* dst, MemoryObject* src) = delete; // TODO: implement
 
-	void CopyTexture(Texture1D* dst,
-					 Texture1D* src,
+	void CopyTexture(const Texture1D* dst,
+					 const Texture1D* src,
 					 SubTexture1D dstPlace = {},
 					 SubTexture1D srcPlace = {}) = delete; // TODO: implement
-	void CopyTexture(Texture2D& dst,
+	void CopyTexture(const Texture2D& dst,
 					 const Texture2D& src,
 					 SubTexture2D dstPlace,
 					 SubTexture2D srcPlace);
-	void CopyTexture(Texture2D& dst,
+	void CopyTexture(const Texture2D& dst,
 	                 const Texture2D& src,
 	                 SubTexture2D dstPlace = {});
-	void CopyTexture(Texture2D& dst,
+	void CopyTexture(const Texture2D& dst,
 					 const LinearBuffer& src,
 					 SubTexture2D dstPlace,
 					 gxapi::TextureCopyDesc bufferDesc);
-	void CopyTexture(Texture3D* dst,
-					 Texture3D* src,
+	void CopyTexture(const Texture3D* dst,
+					 const Texture3D* src,
 					 SubTexture3D dstPlace = {},
 					 SubTexture3D srcPlace = {}) = delete; // TODO: implement
 

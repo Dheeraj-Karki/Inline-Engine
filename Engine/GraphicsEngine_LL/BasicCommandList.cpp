@@ -34,6 +34,14 @@ BasicCommandList::BasicCommandList(gxapi::IGraphicsApi* gxApi,
 }
 
 
+BasicCommandList::~BasicCommandList() {
+	// If the command list was not decomposed, we would like to close it before deleting it.
+	if (m_commandList) {
+		dynamic_cast<gxapi::ICopyCommandList*>(m_commandList.get())->Close();
+	}
+}
+
+
 StackDescHeap* BasicCommandList::GetCurrentScratchSpace() {
 	return m_currentScratchSpace;
 }
@@ -93,6 +101,22 @@ BasicCommandList::Decomposition BasicCommandList::Decompose() {
 }
 
 
+void BasicCommandList::BeginDebuggerEvent(const std::string& name) {
+	m_commandList->BeginDebuggerEvent(name);
+}
+
+void BasicCommandList::EndDebuggerEvent() {
+	m_commandList->EndDebuggerEvent();
+}
+
+
+void BasicCommandList::SetName(const std::string& name) {
+	m_commandList->SetName(name.c_str());
+}
+
+void BasicCommandList::SetName(const char* name) {
+	m_commandList->SetName(name);
+}
 
 
 } // namespace gxapi

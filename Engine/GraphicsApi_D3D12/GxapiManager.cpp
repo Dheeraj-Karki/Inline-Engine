@@ -251,6 +251,11 @@ static std::vector<Macro> ParseMacros(const char* macros) {
 				collection.push_back(m);
 				m.name = m.definition = "";
 			}
+			if (state == NAME && !m.name.empty()) {
+				state = NAME;
+				collection.push_back(m);
+				m.name = m.definition = "";
+			}
 		}
 		else {
 			if (state == NAME)
@@ -258,6 +263,10 @@ static std::vector<Macro> ParseMacros(const char* macros) {
 			else if (state == VALUE)
 				m.definition += c;
 		}
+		++i;
+	}
+	if (!m.name.empty()) {
+		collection.push_back(m);
 	}
 
 	return collection;
@@ -332,6 +341,14 @@ gxapi::ShaderProgramBinary GxapiManager::CompileShader(
 	std::vector<D3D_SHADER_MACRO> d3dMacrosDefines;
 	D3dIncludeProvider d3dIncludeProvider(includeProvider);
 
+	for (auto& m : parsedMacroDefinitions) {
+		D3D_SHADER_MACRO dm;
+		dm.Name = m.name.c_str();
+		dm.Definition = m.definition.c_str();
+		d3dMacrosDefines.push_back(dm);
+	}
+	d3dMacrosDefines.push_back({ nullptr, nullptr });
+
 	HRESULT hr = D3DCompile(
 		source, strlen(source) + 1,
 		nullptr,
@@ -358,7 +375,8 @@ gxapi::ShaderProgramBinary GxapiManager::CompileShader(
 			errorStr.resize(errSize);
 			memcpy(errorStr.data(), errorMessage->GetBufferPointer(), errSize);
 
-			errorStr = std::regex_replace(errorStr, std::regex(R"([[:alnum:]@/_\-\:\\]+(\([0-9\-,]+\):))"), "\\1", std::regex_constants::format_sed);
+			// This is meant to produce readable file names, but it does not really help.
+			//errorStr = std::regex_replace(errorStr, std::regex(R"([[:alnum:]@/_\-\:\\]+(\([0-9\-,]+\):))"), "\\1", std::regex_constants::format_sed);
 
 			throw ShaderCompilationError("Shader compilation failed.", errorStr);
 		}

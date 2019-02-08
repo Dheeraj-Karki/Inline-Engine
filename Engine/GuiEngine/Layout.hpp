@@ -1,26 +1,41 @@
 #pragma once
-#include "Gui.hpp"
 
-namespace inl::gui
-{
+#include "Control.hpp"
 
-class Layout : public Gui
-{
+namespace inl::gui {
+
+
+class Layout : public Control {
 public:
-	//Layout() {}
-	Layout(GuiEngine* guiEngine) :Gui(guiEngine) {}
+	virtual ~Layout() = default;
 
-	virtual void AddItem(Gui* gui) = 0;
-	virtual bool RemoveItem(Gui* gui) = 0;
-	virtual std::vector<Gui*> GetItems() = 0;
+	// Visibility.
+	void SetVisible(bool visible) override;
+	bool GetVisible() const override;
+	bool IsShown() const override;
 
-	template<class T>
-	T* AddItem()
-	{
-		T* child = new T(guiEngine);
-		AddItem(child);
-		return child;
-	}
+	// Style
+	void SetStyle(nullptr_t) override final;
+	void SetStyle(const ControlStyle& style, bool asDefault = false) override final;
+	const ControlStyle& GetStyle() const override final;
+
+	// Hierarchy
+	Control* GetParent() const override final;
+
+	// Layout update
+	virtual void UpdateLayout() = 0;
+
+protected:
+	void OnAttach(Control* parent) override;
+	void OnDetach() override;
+	const DrawingContext* GetContext() const override final { return m_context; }
+
+private:
+	bool m_isStyleInherited = true;
+	ControlStyle m_style;
+	const DrawingContext* m_context = nullptr;
+	Control* m_parent = nullptr;
 };
+
 
 } // namespace inl::gui

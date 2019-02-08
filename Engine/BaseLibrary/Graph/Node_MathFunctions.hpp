@@ -16,12 +16,12 @@ class MathFunctionNode
 {
 public:
 	MathFunctionNode() {
-		GetInput<0>().AddObserver(this);
+		this->template GetInput<0>().AddObserver(this);
 	}
 
 	void Update() override final {
-		ArithmeticT a = GetInput<0>().Get();
-		GetOutput<0>().Set(Function(a));
+		ArithmeticT a = this->template GetInput<0>().Get();
+		this->template GetOutput<0>().Set(Function(a));
 	}
 
 	void Notify(InputPortBase* sender) override {
@@ -31,20 +31,20 @@ public:
 	static std::string Info_GetName() {
 		return name;
 	}
-	std::string GetClassName(bool simplify = false, const std::vector<std::string>& stripNamespaces = {}) const override {
+	std::string GetClassName(bool simplify = false, const std::vector<std::regex>& additional = {}) const override {
 		auto s = Info_GetName();
 		return s.substr(0, s.find_first_of(':'));;
 	}
 
 	const std::string& GetInputName(size_t idx) const override {
 		assert(idx == 0);
-		static const std::string name = "A";
-		return name;
+		static const std::string iname = "A";
+		return iname;
 	}
 	const std::string& GetOutputName(size_t idx) const override {
 		assert(idx == 0);
-		static const std::string name = "R";
-		return name;
+		static const std::string oname = "R";
+		return oname;
 	}
 };
 

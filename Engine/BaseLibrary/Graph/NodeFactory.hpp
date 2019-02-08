@@ -1,6 +1,8 @@
 #pragma once
 
 #include "Node.hpp"
+#include "../Singleton.hpp"
+#include "../StringUtil.hpp"
 
 #include <unordered_map>
 #include <functional>
@@ -25,6 +27,7 @@ public:
 		std::vector<std::type_index> inputTypes;
 		std::vector<std::type_index> outputTypes;
 		std::string name;
+		std::string description;
 		std::string group;
 	};
 private:
@@ -43,6 +46,7 @@ private:
 public:
 	NodeFactory() = default;
 	NodeFactory(const NodeFactory&) = delete;
+	virtual ~NodeFactory() = default;
 
 	/// <summary>
 	/// Register a node class. Registered classes can be instantiated later.
@@ -57,7 +61,7 @@ public:
 	const NodeInfo* GetNodeInfo(const std::string& name) const;
 
 	/// <summary> Get list of all registered nodes. </summary>
-	std::vector<NodeInfo> EnumerateNodes() const;
+	virtual std::vector<NodeInfo> EnumerateNodes() const;
 
 	/// <summary> Get path and class name for given node type. </summary>
 	std::tuple<std::string, std::string> GetFullName(std::type_index classType) const;
@@ -75,19 +79,28 @@ template <class T>
 bool NodeFactory::RegisterNodeClass(const std::string& group) {
 	static_assert(std::is_base_of<NodeBase, T>::value, "Registered class does not inherit from NodeBase.");
 
-	// concat name and group as a path
+	// Cut trailing slash from group name.
 	std::string strGroup = group;
-	std::string strName = T::Info_GetName();
+	while (strGroup.size() > 0 && strGroup[strGroup.size() - 1] == '/') {
+		strGroup.pop_back();
+	}
+
+	// Split name to name and description.
+	std::string nameDesc = T::Info_GetName();
+	auto tokens = Tokenize(nameDesc, ":", false);
+	if (tokens.size() == 0) {
+		throw InvalidArgumentException("Node's name cannot be empty.");
+	}
+
+	std::string strName(tokens[0].begin(), tokens[0].end());
 	if (strName.find('/') != std::string::npos) {
 		assert(false); // Node's name cannot contain slashes
 		return false;
 	}
-	auto descriptionBegins = strName.find(':');
-	if (descriptionBegins != std::string::npos) {
-		strName = strName.substr(0, descriptionBegins);
-	}
-	while (strGroup.size() > 0 && strGroup[strGroup.size() - 1] == '/') {
-		strGroup.pop_back();
+
+	std::string strDesc;
+	if (tokens.size() >= 2) {
+		strDesc = std::string(tokens[1].begin(), tokens[1].end());
 	}
 
 	// check already registered
@@ -99,55 +112,28 @@ bool NodeFactory::RegisterNodeClass(const std::string& group) {
 
 	// set up node information for the class
 	NodeCreator creator;
-	creator.info.name = T::Info_GetName();
+	creator.info.name = strName;
+	creator.info.description = strDesc;
 	creator.info.group = strGroup;
-	//creator.info.numInputPorts = T::Info_GetNumInputs();
-	//creator.info.numOutputPorts = T::Info_GetNumOutputs();
-	//creator.info.inputTypes = T::Info_GetInputTypes();
-	//creator.info.outputTypes = T::Info_GetOutputTypes();
-	//creator.info.inputNames = T::Info_GetInputNames();
-	//creator.info.outputNames = T::Info_GetOutputNames();
 	creator.creator = []() -> NodeBase* {return new T();};
 
 	// insert class to registered classes' map
 	registeredClasses.insert({ strGroup + (strGroup.size() > 0 ? "/" : "") + strName, std::move(creator) });
 	typeLookup.insert({ typeid(T), { strGroup, strName } });
 
-
 	return true;
 }
 
 
+using NodeFactory_Singleton = Singleton<NodeFactory>;
 
 
 
-// Statics don't fucking work when you have even static libraries.
-// That fucking linker does not include unreferenced symbols, so 
-// static member ctors are never called, thus classes are never registered.
-// Can be solved by forcing the linker to include all symbols, but
-// that's not portable, not efficient, and ugly as fuck. Anyway, use
-// /OPT:NOREF on msvc and -Wl --whole-library on gcc.
-//
-// Switched to explicit registration, however, don't delete this code.
-
-
-//template <class T, const char* Group>
-//class AutoRegisterNode {
-//	class Registerer {
-//	public:
-//		Registerer() {
-//			NodeFactory::GetInstance()->RegisterNodeClass<T>(Group);
-//		}
-//	};
-//public:
-//	AutoRegisterNode() { &registerer; }
-//private:
-//	static Registerer registerer;
-//};
-//
-//template <class T, const char* Group>
-//typename AutoRegisterNode<T, Group>::Registerer AutoRegisterNode<T, Group>::registerer;
-
+#define INL_REGISTER_NODE(ClassName) \
+const int __declspec(dllexport) s_registrar_##ClassName = [] { \
+	std::cout << ClassName::Info_GetName() << std::endl; \
+	return true; \
+}();
 
 
 } // namespace inl

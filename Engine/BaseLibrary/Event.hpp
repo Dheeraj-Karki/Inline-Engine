@@ -8,6 +8,7 @@
 #include <mutex>
 #include <vector>
 #include <typeindex>
+#include <functional>
 
 
 #ifdef _MSC_VER
@@ -62,9 +63,33 @@ class Event {
 	template <class Fun>
 	static constexpr bool IsComparable = templ::is_equality_comparable<Fun>::value && templ::is_less_comparable<Fun>::value;
 public:
+	Event() = default;
+
+	/// <summary> All signed up functors are copied as well and signed up for the new event. </summary>
+	Event(const Event& other) : m_simples(other.m_simples), m_comparables(other.m_comparables) {}
+
+	/// <summary> All signed up functors are copied as well and signed up for the new event, old event is empty. </summary>
+	Event(Event&& other) : m_simples(std::move(other.m_simples)), m_comparables(std::move(other.m_comparables)) {}
+
+	/// <summary> All signed up functors are copied as well and signed up for the new event. </summary>
+	Event& operator=(const Event& other) {
+		m_simples = other.m_simples;
+		m_comparables = other.m_comparables;
+
+		return *this;
+	}
+
+	/// <summary> All signed up functors are copied as well and signed up for the new event, old event is empty. </summary>
+	Event& operator=(Event&& other) {
+		m_simples = std::move(other.m_simples);
+		m_comparables = std::move(other.m_comparables);
+
+		return *this;
+	}
+
 	/// <summary> Fire off the event, call all signed up functors with given arguments. </summary>
 	void operator()(ArgsT... args) {
-		std::unique_lock<spin_mutex> lkg(m_mtx);
+		std::unique_lock<SpinMutex> lkg(m_mtx);
 		// Copy so that if a fired functor changes m_simples/m_comparables iterators won't invalidate.
 		auto simples = m_simples;
 		auto comparables = m_comparables;
@@ -110,17 +135,8 @@ public:
 		return false;
 	}
 
-	/// <summary> Copy event object.
-	///		all signed up functors are copied as well and signed up for the new event. </summary>
-	Event& operator=(const Event& other) {
-		m_simples = other.m_simples;
-		m_comparables = other.m_comparables;
-
-		return *this;
-	}
-
 private:
-	spin_mutex m_mtx;
+	SpinMutex m_mtx;
 
 	std::vector<std::function<void(ArgsT...)>> m_simples; // These functions cannot be removed via -=
 	std::multiset<Comparable> m_comparables; // These function can be removed by -= because they have < and ==
